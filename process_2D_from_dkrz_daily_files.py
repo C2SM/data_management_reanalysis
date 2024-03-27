@@ -165,7 +165,7 @@ def main():
 
                 # check if unit needs to be changed from era5 variable to cmip variable
                 if (era5_info["unit"] != era5_info["cmip_unit"]):
-                    logger.info(f'Unit for tp needs to be changed from {era5_info["unit"]} to {era5_info["cmip_unit"]}.')
+                    logger.info(f'Unit for {era5_info["short_name"]} needs to be changed from {era5_info["unit"]} to {era5_info["cmip_unit"]}.')
                     if var == "tcc":
                         tmp_outfile = convert_tcc(tmp_outfile, cfg.work_path, era5_info, year, month)
                     elif var == "tp":
