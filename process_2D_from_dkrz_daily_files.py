@@ -22,6 +22,8 @@ import glob
 import time
 from datetime import datetime
 
+from functions.file_util import read_config, read_era5_info
+
 # -------------------------------------------------
 # Create a simple logger
 # -------------------------------------------------
@@ -40,71 +42,6 @@ logging.basicConfig(filename=LOG_FILENAME,
                     format='%(levelname)s %(asctime)s: %(message)s',
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-# -------------------------------------------------
-# Read Config
-# -------------------------------------------------
-class Config:
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-def read_config(configfolder, configfile):
-
-    config = {}
-    type_mapping = {'True': True, 'False': False}
-    with open(os.path.join(os.getcwd(), configfolder, configfile), 'r') as f:
-        for line in f:
-            if '=' in line:
-                k,v = line.split('=', 1)
-                v = v.replace('"', '').strip()
-                if ',' in v:
-                    v = [item.strip() for item in v.split(',')] 
-                elif ' ' in v:
-                    v = v.split(' ')              
-                else:
-                    v = type_mapping.get(v, int(v) if v.isdigit() else v)
-                config[k.strip()] = v
-
-    return Config(**config)
-
-# -------------------------------------------------
-# Read ERA5 info from JSON file
-# -------------------------------------------------
-
-def read_era5_info(vname):
-    '''
-    Loading ERA5 variables's information as 
-    python Dictionary from JSON file
-
-    Input:
-    a string with the ERA5 variable short name to be processed
- 
-    Return:
-    dict with variable infos
-    '''
-    era5_info = dict()
-
-    with open('ERA5_variables.json', 'r') as jf:
-        era5 = json.load(jf)
-        # Variable's long-name, param and unit
-        vlong = era5[vname][0]
-        vunit = era5[vname][1]
-        vparam = era5[vname][2]
-        analysis = era5[vname][4]
-        vcmip = era5[vname][6]
-        unitcmip = era5[vname][7]
-
-        era5_info["short_name"] = vname
-        era5_info["long_name"] = vlong
-        era5_info["unit"] = vunit
-        era5_info["param"] = vparam
-        era5_info["analysis"] = analysis
-        era5_info["cmip_name"] = vcmip
-        era5_info["cmip_unit"] = unitcmip
-
-    return era5_info
 
 
 def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, year, month):
@@ -139,6 +76,13 @@ def convert_tp(tp_outfile, workdir, era5_info, year, month):
 
     return tp_outfile
 
+def convert_radiation(rad_outfile, workdir, era5_info, year, month):
+    os.system(f'cdo -b F64 divc,86400 {rad_outfile} {workdir}/{era5_info["short_name"]}_era5_{year}{month}_divc.nc')
+    os.system(f'rm {workdir}/{era5_info["short_name"]}_era5_{year}{month}.nc')
+    os.system(f'ncatted -a units,{era5_info["short_name"]},m,c,"{era5_info["cmip_unit"]}" {workdir}/{era5_info["short_name"]}_era5_{year}{month}_divc.nc {rad_outfile}')
+
+    return rad_outfile
+
 def convert_era5_to_cmip(tmp_outfile, outfile, config, era5_info, year, month):
 
     tmpfile = f'{config.work_path}/{era5_info["short_name"]}_era5_{year}{month}'
@@ -157,7 +101,6 @@ def main():
     # -------------------------------------------------
     # Read config
     # -------------------------------------------------
-    # read config file
     cfg = read_config('configs', 'era5_2D_dkrz_config.ini')
     logger.info(f'Read configuration is: {cfg}')
     print(f'Read configuration is: {cfg}')
@@ -222,13 +165,13 @@ def main():
 
                 # check if unit needs to be changed from era5 variable to cmip variable
                 if (era5_info["unit"] != era5_info["cmip_unit"]):
+                    logger.info(f'Unit for tp needs to be changed from {era5_info["unit"]} to {era5_info["cmip_unit"]}.')
                     if var == "tcc":
-                        logger.info(f'Unit for tcc needs to be changed from {era5_info["unit"]} to {era5_info["cmip_unit"]}.')
-
                         tmp_outfile = convert_tcc(tmp_outfile, cfg.work_path, era5_info, year, month)
                     elif var == "tp":
-                        logger.info(f'Unit for tp needs to be changed from {era5_info["unit"]} to {era5_info["cmip_unit"]}.')
                         tmp_outfile = convert_tp(tmp_outfile, cfg.work_path, era5_info, year, month)
+                    elif var == "ssrd" or var == "strd" or var == "str":
+                        tmp_outfile = convert_radiation(tmp_outfile, cfg.work_path, era5_info, year, month)
                     else:
                         logger.error(f'Conversion of unit for variable {var} is not implemented!')
                         sys.exit(1)
