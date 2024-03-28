@@ -12,6 +12,8 @@ from datetime import datetime
 
 import xarray as xr
 
+from functions.file_util import read_config, read_era5_info
+
 # -------------------------------------------------
 # Create a simple logger
 # -------------------------------------------------
@@ -20,96 +22,6 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s : %(message)s", level=logging.INFO
 )
 logger = logging.getLogger()
-
-
-# -------------------------------------------------
-# Read Config
-# -------------------------------------------------
-class Config:
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-
-def read_config(configfolder, configfile):
-    config = {}
-    type_mapping = {"True": True, "False": False}
-    with open(os.path.join(os.getcwd(), configfolder, configfile), "r") as f:
-        for line in f:
-            if "=" in line:
-                k, v = line.split("=", 1)
-                v = v.replace('"', "").strip()
-                if "," in v:
-                    v = [item.strip() for item in v.split(",")]
-                elif " " in v:
-                    v = v.split(" ")
-                else:
-                    v = type_mapping.get(v, int(v) if v.isdigit() else v)
-                config[k.strip()] = v
-
-    return Config(**config)
-
-
-# -------------------------------------------------
-# Read ERA5 info from JSON file
-# -------------------------------------------------
-
-
-def read_era5_info(vname):
-    """
-    Loading ERA5 variables's information as
-    python Dictionary from JSON file
-
-    Input:
-    a string with the ERA5 variable short name to be processed
-
-    Return:
-    dict with variable infos
-    """
-    era5_info = dict()
-
-    with open("ERA5_variables.json", "r") as jf:
-        era5 = json.load(jf)
-        # Variable's long-name, param and unit
-        vlong = era5[vname][0]
-        vunit = era5[vname][1]
-        vparam = era5[vname][2]
-        vcmip = era5[vname][6]
-        unitcmip = era5[vname][7]
-
-        era5_info["short_name"] = vname
-        era5_info["long_name"] = vlong
-        era5_info["unit"] = vunit
-        era5_info["param"] = vparam
-        era5_info["cmip_name"] = vcmip
-        era5_info["cmip_unit"] = unitcmip
-
-    return era5_info
-
-
-# -------------------------------------------------
-# Read CMIP6 info from JSON file
-# -------------------------------------------------
-def read_cmip_info(cmip_name):
-    """
-    Loading CMIP variables's information from JSON file
-
-    Input:
-    A short CMIP variable name such as "tas"
-
-    Return:
-    standrtad_name and long_name of that variable
-    """
-
-    with open(
-        "/net/co2/c2sm/rlorenz/scripts/cmip6-cmor-tables/Tables/CMIP6_Amon.json"
-    ) as jf_cmip:
-        cmip6 = json.load(jf_cmip)
-
-        cmip_standard_name = cmip6["variable_entry"][cmip_name]["standard_name"]
-        cmip_long_name = cmip6["variable_entry"][cmip_name]["long_name"]
-
-    return (cmip_standard_name, cmip_long_name)
 
 
 def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, year, month, day_str):
@@ -156,7 +68,7 @@ def convert_z(tmp_outfile, workdir, era5_info, year, month, day_str):
 
 
 def convert_era5_to_cmip(
-    tmp_outfile, outfile, config, era5_info, cmip_info, year, month
+    tmp_outfile, outfile, config, era5_info, year, month
 ):
     tmpfile = f'{config.work_path}/{era5_info["short_name"]}_era5_{year}{month}'
 
@@ -164,8 +76,6 @@ def convert_era5_to_cmip(
     with xr.open_dataset(f"{tmp_outfile}") as ds:
         plev = ds.sizes["level"]
 
-    # os.system(f'ncatted -O -a long_name,{era5_info["short_name"]},c,c,"{cmip_info[1]}" {tmp_outfile} {tmpfile}_ncatted2.nc')
-    # os.system(f'ncatted -O -a standard_name,{era5_info["short_name"]},c,c,"{cmip_info[0]}" {tmpfile}_ncatted2.nc {tmpfile}_ncatted3.nc')
     os.system(
         f"cdo remapcon,/net/atmos/data/era5_cds/gridfile_cds_025.txt {tmp_outfile} {tmpfile}_remapped.nc"
     )
@@ -325,7 +235,7 @@ def main():
                 )
 
                 outfile_name = convert_era5_to_cmip(
-                    daily_file, outfile, cfg, era5_info, cmip_info, year, month
+                    daily_file, outfile, cfg, era5_info, year, month
                 )
 
                 logger.info(f"File {outfile_name} written.")
