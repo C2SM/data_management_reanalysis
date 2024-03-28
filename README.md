@@ -20,7 +20,7 @@ For some variables we also change the units according to CMIP.
 
 ### Dependencies
 
-* needs python, packages os, json, logging, calendar, xarray, glob, time, datetime
+* needs python, xarray
 * needs eccodes grib_to_netcdf
 
 
