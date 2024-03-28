@@ -4,14 +4,12 @@
 # Getting libraries and utilities
 # -------------------------------------------------
 import calendar
-import glob
 import json
 import logging
 import os
 import sys
 from datetime import datetime
 
-import cdsapi
 import xarray as xr
 
 # -------------------------------------------------
@@ -206,7 +204,7 @@ def main():
         # read ERA5_variables.json
         # -------------------------------------------------
         era5_info = read_era5_info(var)
-        logger.info(f"ERA5 variable info red from json file.")
+        logger.info("ERA5 variable info red from json file.")
         logger.info(f'longname: {era5_info["long_name"]},')
         logger.info(f'unit: {era5_info["unit"]},')
         logger.info(f'oldname: {era5_info["param"]},')

@@ -46,7 +46,6 @@ def read_era5_info(vname):
     Return:
     variable infos
     """
-    era5_info = dict()
 
     with open("ERA5_variables.json", "r") as jf:
         era5 = json.load(jf)

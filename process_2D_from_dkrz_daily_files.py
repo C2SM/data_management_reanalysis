@@ -8,9 +8,6 @@ Purpose: process ERA5 data downloaded from dkrz
         to variable names and units as in cmip
 """
 
-import calendar
-import glob
-import json
 import logging
 
 # -------------------------------------------------
@@ -20,9 +17,6 @@ import os
 import sys
 import time
 from datetime import datetime
-
-import cdsapi
-import xarray as xr
 
 from functions.file_util import read_config, read_era5_info
 
@@ -142,7 +136,7 @@ def main():
         # read ERA5_variables.json
         # -------------------------------------------------
         era5_info = read_era5_info(var)
-        logger.info(f"ERA5 variable info red from json file.")
+        logger.info("ERA5 variable info red from json file.")
         logger.info(f'longname: {era5_info["long_name"]},')
         logger.info(f'unit: {era5_info["unit"]},')
         logger.info(f'oldname: {era5_info["param"]},')
