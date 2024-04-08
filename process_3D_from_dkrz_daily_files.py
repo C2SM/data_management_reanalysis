@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import sys
+from datetime import datetime
 
 import xarray as xr
 
@@ -105,13 +106,39 @@ def main():
         logger.info(f'cmipname: {era5_info["cmip_name"]},')
         logger.info(f'cmipunit: {era5_info["cmip_unit"]}.')
 
-        # read cmip standard_name and long_name from cmip6-cmor-tables
-        cmip_info = read_cmip_info(era5_info["cmip_name"])
-
         for year in range(cfg.startyr, cfg.endyr + 1):
             logger.info(f"Processing year {year}.")
             proc_archive = f'{cfg.path_proc}/{era5_info["cmip_name"]}/day/native/{year}'
             os.makedirs(proc_archive, exist_ok=True)
+
+            t0 = datetime.now()
+
+            logger.info(f"Copying variable {var}")
+            vparam = era5_info["param"]
+
+            if int(era5_info["analysis"]) == 1:
+                type = "an"
+                typeid = "00"
+            else:
+                type = "fc"
+                typeid = "12"
+
+            dkrz_path = f"/pool/data/ERA5/E5/pl/{type}/{cfg.freq}/{vparam}"
+
+            iac_path = f"{grib_path}"
+
+            os.makedirs(iac_path, exist_ok=True)
+
+            logger.info(f"rsync data from  {dkrz_path} to {iac_path}")
+            os.system(
+                f"rsync -av levante:{dkrz_path}/E5pl{typeid}_{cfg.freq}_{year}-??_{vparam}.* {iac_path}"
+            )
+
+            dt = datetime.now() - t0
+            logger.info(f"Success! All data copied in {dt}")
+
+
+
             for month in [
                 "01",
                 "02",
@@ -171,7 +198,7 @@ def main():
         # Clean up
         # -------------------------------------------------
         os.system(f"rm {cfg.work_path}/{var}_*")
-    # os.system(f'rm {grib_path}/*')
+    os.system(f'rm {grib_path}/*')
 
 
 if __name__ == "__main__":
