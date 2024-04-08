@@ -238,11 +238,11 @@ def main():
             )
             os.system(f"cdo monmean {outfile_name} {outfile_mon}")
 
-            # -------------------------------------------------
-            # Clean up
-            # -------------------------------------------------
-            os.system(f"rm {cfg.work_path}/{var}_*")
-            os.system(f"rm {grib_path}/*")
+        # -------------------------------------------------
+        # Clean up
+        # -------------------------------------------------
+        os.system(f"rm {cfg.work_path}/{var}_*")
+        os.system(f"rm {grib_path}/*")
 
 
 if __name__ == "__main__":
