@@ -82,7 +82,7 @@ def main():
     # Read config
     # -------------------------------------------------
     # read config file
-    cfg = read_config("configs", "era5_dkrz_config.ini")
+    cfg = read_config("configs", "era5_3D_dkrz_config.ini")
     logger.info(f"Read configuration is: {cfg}")
     print(f"Read configuration is: {cfg}")
 

@@ -6,7 +6,7 @@ Process ERA5 data downloaded from dkrz as grib to netcdf and change variable nam
 
 The ERA5 reanalysis gives a state of the art representation of the past conditions of the atmosphere. The data is 
 useful in many aspects and can be downloaded directly from ECMWF via Climate Data Store (CDS). However, the CDS
-tends to be too slow of large amounts of data need to be downloaded, in particular if 3D fields on pressure levels are needed.
+tends to be too slow if large amounts of data need to be downloaded, in particular if 3D fields on pressure levels are needed.
 The data can only be downoaded as 1-hourly (or some variables as monthly aggregates) data from CDS but many of our users need daily resolutions.
 
 The DKRZ also has a ERA5 data pool with part of the data in 1-hourly, daily and monthly resolutions.
