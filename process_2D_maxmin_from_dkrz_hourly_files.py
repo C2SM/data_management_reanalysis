@@ -39,29 +39,22 @@ def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, year, month, day
     return tmp_outfile
 
 
-def calc_min(tmp_outfile, workdir, era5_info, year, month, day_str):
+def calc_minmax(infile, minmax_file, dayagg, year, month, day_str):
+
     os.system(
-        f'cdo daymin {tmp_outfile} {workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}_min.nc'
+        f'cdo {dayagg} {infile} {minmax_file}{day_str}.nc'
     )
-    os.system(f'rm {workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}.nc')
-    os.system(
-        f'cdo chname {era5_info["short_name"]},{era5_info["cmip_name"]}" {workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}_min.nc {tmp_outfile}'
-    )
+    if not os.path.isfile(
+        f"{minmax_file}{day_str}.nc"
+    ):
+        logger.warning(
+            f"{minmax_file}{day_str}.nc was not processed properly!"
+        )
+    else:
+        # clean up 1-hr data
+        os.system(f"rm {infile}")
 
-    return tmp_outfile
-
-
-def calc_max(tmp_outfile, workdir, era5_info, year, month, day_str):
-    os.system(
-        f'cdo daymax {tmp_outfile} {workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}_max.nc'
-    )
-    os.system(f'rm {workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}.nc')
-    os.system(
-        f'cdo chname {era5_info["short_name"]},{era5_info["cmip_name"]}" {workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}_max.nc {tmp_outfile}'
-    )
-
-    return tmp_outfile
-
+    return
 
 def convert_era5_to_cmip(
     tmp_outfile, varout, outfile, config, era5_info, year, month
@@ -80,6 +73,16 @@ def convert_era5_to_cmip(
 
     return outfile
 
+
+def calc_mon_mean(path_proc, infile, varout, year, month):
+    proc_mon_archive = (
+        f'{path_proc}/{varout}/mon/native/{year}'
+    )
+    os.makedirs(proc_mon_archive, exist_ok=True)
+    outfile_mon = (
+        f'{proc_mon_archive}/{varout}_mon_era5_{year}{month}.nc'
+    )
+    os.system(f"cdo monmean {outfile_name} {outfile_mon}")
 
 # -------------------------------------------------
 
@@ -113,6 +116,12 @@ def main():
         logger.info(f'oldname: {era5_info["param"]},')
         logger.info(f'cmipname: {era5_info["cmip_name"]},')
         logger.info(f'cmipunit: {era5_info["cmip_unit"]}.')
+
+        # calculate daily max or min?
+        if "max" in varout:
+            dayagg = "daymax"
+        elif "min" in varout:
+            dayagg = "daymin"
 
         for year in range(cfg.startyr, cfg.endyr + 1):
             logger.info(f"Processing year {year}.")
@@ -160,6 +169,8 @@ def main():
                 num_days = calendar.monthrange(year, int(month))[1]
                 days = [*range(1, num_days + 1)]
 
+                minmax_file = f'{cfg.work_path}/{var}_{dayagg}_era5_{year}{month}'
+
                 for day in days:
                     day_str = f"{day:02d}"
 
@@ -169,32 +180,12 @@ def main():
                         grib_file, cfg.work_path, era5_info, year, month, day_str
                     )
 
-                    # calculate daily max, min
-                    if "max" in varout:
-                        dayagg = "daymax"
-                        os.system(
-                            f"cdo daymax {tmp_outfile}  {cfg.work_path}/{var}_{dayagg}_era5_{year}{month}{day_str}.nc"
-                        )
-                    elif "min" in varout:
-                        dayagg = "daymin"
-                        os.system(
-                            f"cdo daymin {tmp_outfile}  {cfg.work_path}/{var}_{dayagg}_era5_{year}{month}{day_str}.nc"
-                        )          
-
-                    if not os.path.isfile(
-                        f"{cfg.work_path}/{var}_{dayagg}_era5_{year}{month}{day_str}.nc"
-                    ):
-                        logger.warning(
-                            f"{cfg.work_path}/{var}_{dayagg}_era5_{year}{month}{day_str}.nc was not processed properly!"
-                        )
-                    else:
-                        # clean up 1-hr data
-                        os.system(f"rm {tmp_outfile}")
+                    calc_minmax(tmp_outfile, minmax_file, dayagg, year, month, day_str)
 
                 # concatenate daily files
                 daily_file = f"{cfg.work_path}/{varout}_day_era5_{year}{month}.nc"
                 os.system(
-                    f"cdo -b F64 mergetime {cfg.work_path}/{var}_{dayagg}_era5_{year}{month}*.nc {daily_file}"
+                    f"cdo -b F64 mergetime {minmax_file}*.nc {daily_file}"
                 )
 
                 outfile_name = convert_era5_to_cmip(
@@ -212,6 +203,8 @@ def main():
                 f'{proc_mon_archive}/{varout}_mon_era5_{year}{month}.nc'
             )
             os.system(f"cdo monmean {outfile_name} {outfile_mon}")
+
+            logger.info(f"File {outfile_mon} written.")
 
         # -------------------------------------------------
         # Clean up
