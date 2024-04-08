@@ -64,22 +64,18 @@ def calc_max(tmp_outfile, workdir, era5_info, year, month, day_str):
 
 
 def convert_era5_to_cmip(
-    tmp_outfile, outfile, config, era5_info, year, month
+    tmp_outfile, varout, outfile, config, era5_info, year, month
 ):
     tmpfile = f'{config.work_path}/{era5_info["short_name"]}_era5_{year}{month}'
-
-    # extract number of p-levels for chunking
-    with xr.open_dataset(f"{tmp_outfile}") as ds:
-        plev = ds.sizes["level"]
 
     os.system(
         f"cdo remapcon,/net/atmos/data/era5_cds/gridfile_cds_025.txt {tmp_outfile} {tmpfile}_remapped.nc"
     )
     os.system(
-        f"ncks -O -4 -D 4 --cnk_plc=g3d --cnk_dmn=time,1 --cnk_dmn=level,{plev} --cnk_dmn=lat,{config.lat_chk} --cnk_dmn=lon,{config.lon_chk} {tmpfile}_remapped.nc {tmpfile}_chunked.nc"
+        f"ncks -O -4 -D 4 --cnk_plc=g3d --cnk_dmn=time,1 --cnk_dmn=lat,{config.lat_chk} --cnk_dmn=lon,{config.lon_chk} {tmpfile}_remapped.nc {tmpfile}_chunked.nc"
     )
     os.system(
-        f'ncrename -O -v {era5_info["short_name"]},{era5_info["cmip_name"]} {tmpfile}_chunked.nc {outfile}'
+        f'ncrename -O -v {era5_info["short_name"]},{varout} {tmpfile}_chunked.nc {outfile}'
     )
 
     return outfile
@@ -95,7 +91,6 @@ def main():
     # read config file
     cfg = read_config("configs", "era5_dkrz_config_maxmin.ini")
     logger.info(f"Read configuration is: {cfg}")
-    print(f"Read configuration is: {cfg}")
 
     # -------------------------------------------------
     # Create directories if do not exist yet
@@ -106,6 +101,7 @@ def main():
     for v, varout in enumerate(cfg.varout):
         var = cfg.variables
         grib_path = f"{cfg.path}/{var}"
+        logger.info(f'Processing variable {varout} from {var}:')
 
         # -------------------------------------------------
         # read ERA5_variables.json
@@ -117,9 +113,6 @@ def main():
         logger.info(f'oldname: {era5_info["param"]},')
         logger.info(f'cmipname: {era5_info["cmip_name"]},')
         logger.info(f'cmipunit: {era5_info["cmip_unit"]}.')
-
-        # read cmip standard_name and long_name from cmip6-cmor-tables
-        cmip_info = read_cmip_info(era5_info["cmip_name"])
 
         for year in range(cfg.startyr, cfg.endyr + 1):
             logger.info(f"Processing year {year}.")
@@ -143,7 +136,7 @@ def main():
             dt = datetime.now() - t0
             logger.info(f"Success! All data copied in {dt}")
 
-            proc_archive = f'{cfg.path_proc}/{era5_info["cmip_name"]}/day/native/{year}'
+            proc_archive = f'{cfg.path_proc}/{varout}/day/native/{year}'
             os.makedirs(proc_archive, exist_ok=True)
 
             for month in [
@@ -161,15 +154,14 @@ def main():
                 "12",
             ]:
                 outfile = (
-                    f'{proc_archive}/{era5_info["cmip_name"]}_day_era5_{year}{month}.nc'
+                    f'{proc_archive}/{varout}_day_era5_{year}{month}.nc'
                 )
-                print(month)
+
                 num_days = calendar.monthrange(year, int(month))[1]
                 days = [*range(1, num_days + 1)]
-                print(days)
+
                 for day in days:
                     day_str = f"{day:02d}"
-                    print(day_str)
 
                     grib_file = f'{grib_path}/E5sf00_{cfg.freq}_{year}-{month}-{day_str}_{era5_info["param"]}.grb'
 
@@ -178,47 +170,55 @@ def main():
                     )
 
                     # calculate daily max, min
-                    os.system(
-                        f"cdo daymean {tmp_outfile}  {cfg.work_path}/{var}_daymean_era5_{year}{month}{day_str}.nc"
-                    )
+                    if "max" in varout:
+                        dayagg = "daymax"
+                        os.system(
+                            f"cdo daymax {tmp_outfile}  {cfg.work_path}/{var}_{dayagg}_era5_{year}{month}{day_str}.nc"
+                        )
+                    elif "min" in varout:
+                        dayagg = "daymin"
+                        os.system(
+                            f"cdo daymin {tmp_outfile}  {cfg.work_path}/{var}_{dayagg}_era5_{year}{month}{day_str}.nc"
+                        )          
 
                     if not os.path.isfile(
-                        f"{cfg.work_path}/{var}_daymean_era5_{year}{month}{day_str}.nc"
+                        f"{cfg.work_path}/{var}_{dayagg}_era5_{year}{month}{day_str}.nc"
                     ):
                         logger.warning(
-                            f"{cfg.work_path}/{var}_daymean_era5_{year}{month}{day_str}.nc was not processed properly!"
+                            f"{cfg.work_path}/{var}_{dayagg}_era5_{year}{month}{day_str}.nc was not processed properly!"
                         )
                     else:
                         # clean up 1-hr data
                         os.system(f"rm {tmp_outfile}")
 
                 # concatenate daily files
-                daily_file = f"{cfg.work_path}/{var}_day_era5_{year}{month}.nc"
+                daily_file = f"{cfg.work_path}/{varout}_day_era5_{year}{month}.nc"
                 os.system(
-                    f"cdo mergetime {cfg.work_path}/{var}_daymean_era5_{year}{month}*.nc {daily_file}"
+                    f"cdo -b F64 mergetime {cfg.work_path}/{var}_{dayagg}_era5_{year}{month}*.nc {daily_file}"
                 )
 
                 outfile_name = convert_era5_to_cmip(
-                    daily_file, outfile, cfg, era5_info, year, month
+                    daily_file, varout, outfile, cfg, era5_info, year, month
                 )
 
                 logger.info(f"File {outfile_name} written.")
 
             # calculate monthly mean
             proc_mon_archive = (
-                f'{cfg.path_proc}/{era5_info["cmip_name"]}/mon/native/{year}'
+                f'{cfg.path_proc}/{varout}/mon/native/{year}'
             )
             os.makedirs(proc_mon_archive, exist_ok=True)
             outfile_mon = (
-                f'{proc_mon_archive}/{era5_info["cmip_name"]}_mon_era5_{year}{month}.nc'
+                f'{proc_mon_archive}/{varout}_mon_era5_{year}{month}.nc'
             )
             os.system(f"cdo monmean {outfile_name} {outfile_mon}")
 
-            # -------------------------------------------------
-            # Clean up
-            # -------------------------------------------------
-            os.system(f"rm {cfg.work_path}/{var}_*")
-            os.system(f"rm {grib_path}/*")
+        # -------------------------------------------------
+        # Clean up
+        # -------------------------------------------------
+        os.system(f"rm {cfg.work_path}/{varout}_*")
+    os.system(f"rm {cfg.work_path}/{var}_*")
+    os.system(f"rm {grib_path}/*")
 
 
 if __name__ == "__main__":
