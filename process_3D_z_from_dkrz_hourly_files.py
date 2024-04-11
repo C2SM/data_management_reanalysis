@@ -240,15 +240,15 @@ def main():
 
                 logger.info(f"File {outfile_name} written.")
 
-            # calculate monthly mean
-            proc_mon_archive = (
-                f'{cfg.path_proc}/{era5_info["cmip_name"]}/mon/native/{year}'
-            )
-            os.makedirs(proc_mon_archive, exist_ok=True)
-            outfile_mon = (
-                f'{proc_mon_archive}/{era5_info["cmip_name"]}_mon_era5_{year}{month}.nc'
-            )
-            os.system(f"cdo monmean {outfile_name} {outfile_mon}")
+                # calculate monthly mean
+                proc_mon_archive = (
+                    f'{cfg.path_proc}/{era5_info["cmip_name"]}/mon/native/{year}'
+                )
+                os.makedirs(proc_mon_archive, exist_ok=True)
+                outfile_mon = (
+                    f'{proc_mon_archive}/{era5_info["cmip_name"]}_mon_era5_{year}{month}.nc'
+                )
+                os.system(f"cdo monmean {outfile_name} {outfile_mon}")
 
             # -------------------------------------------------
             # Clean up
