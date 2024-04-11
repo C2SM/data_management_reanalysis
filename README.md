@@ -1,6 +1,10 @@
-# Download data DKRZ
+# Data Management reanalysis
 
-Process ERA5 data downloaded from dkrz as grib to netcdf and change variable names and units as in cmip.
+Repository to download and process reanalysis data (ERA5, CERRA, etc.).
+CERRA and CERRA-Land data are downloaded from Climate Data Store (CDS).
+ERA5 data are downloaded from DKRZ if possible, variables not available from DKRZ are downloaded from CDS.
+Data is downloaded as grib (smaller, CDS netcdf download experimental) and then converted to netcdf.
+Then, variable names and units are changed according to cmip. Some cmip variables have to be calculated.
 
 ## Description
 
