@@ -52,7 +52,7 @@ def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, year, month):
     incl. standard_name and long_name
     """
 
-    tmpfile = f'{workdir}/tmp_var{era5_info["param"]}_era5'
+    tmpfile = f'{workdir}/tmp_var{era5_info["param"]}_era5_{year}{month}'
     tmp_outfile = f'{workdir}/{era5_info["short_name"]}_era5_{year}{month}.nc'
     os.system(f"cdo -t ecmwf -setgridtype,regular {grib_file} {tmpfile}.grib")
     os.system(f"grib_to_netcdf -o  {tmp_outfile} {tmpfile}.grib")
@@ -228,21 +228,21 @@ def main():
 
                 logger.info(f"File {outfile_name} written.")
 
-            # calculate monthly mean
-            proc_mon_archive = (
-                f'{cfg.path_proc}/{era5_info["cmip_name"]}/mon/native/{year}'
-            )
-            os.makedirs(proc_mon_archive, exist_ok=True)
-            outfile_mon = (
-                f'{proc_mon_archive}/{era5_info["cmip_name"]}_mon_era5_{year}{month}.nc'
-            )
-            os.system(f"cdo monmean {outfile_name} {outfile_mon}")
+                # calculate monthly mean
+                proc_mon_archive = (
+                    f'{cfg.path_proc}/{era5_info["cmip_name"]}/mon/native/{year}'
+                )
+                os.makedirs(proc_mon_archive, exist_ok=True)
+                outfile_mon = (
+                    f'{proc_mon_archive}/{era5_info["cmip_name"]}_mon_era5_{year}{month}.nc'
+                )
+                os.system(f"cdo monmean {outfile_name} {outfile_mon}")
 
-        # -------------------------------------------------
-        # Clean up
-        # -------------------------------------------------
-        os.system(f"rm {cfg.work_path}/{var}_*")
-        os.system(f"rm {grib_path}/*")
+                # -------------------------------------------------
+                # Clean up
+                # -------------------------------------------------
+                os.system(f"rm {cfg.work_path}/{var}_*")
+                os.system(f"rm {grib_path}/*")
 
 
 if __name__ == "__main__":
