@@ -242,7 +242,8 @@ def main():
                 # Clean up
                 # -------------------------------------------------
                 os.system(f"rm {cfg.work_path}/{var}_*")
-                os.system(f"rm {grib_path}/*")
+                os.system(f"rm {cfg.work_path}/tmp_{var}_*")
+            os.system(f"rm {grib_path}/*")
 
 
 if __name__ == "__main__":
