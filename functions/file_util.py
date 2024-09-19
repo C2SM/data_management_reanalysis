@@ -72,3 +72,9 @@ def read_era5_info(vname):
         era5_info["cmip_unit"] = unitcmip
 
     return era5_info
+
+
+def get_checkpoint(work_dir):
+    checkpoint_dir = os.path.join(work_dir, 'checkpoints')
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    return checkpoint_dir

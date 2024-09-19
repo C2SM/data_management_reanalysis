@@ -99,11 +99,14 @@ def convert_radiation(rad_outfile, workdir, era5_info, year, month):
 def convert_era5_to_cmip(tmp_outfile, outfile, config, era5_info, year, month):
     tmpfile = f'{config.work_path}/{era5_info["short_name"]}_era5_{year}{month}'
 
+    lat_chk = config['chunking']['lat_chk']
+    lon_chk = config['chunking']['lon_chk']
+
     os.system(
         f"cdo remapcon,/net/atmos/data/era5_cds/gridfile_cds_025.txt {tmp_outfile} {tmpfile}_remapped.nc"
     )
     os.system(
-        f"ncks -O -4 -D 4 --cnk_plc=g3d --cnk_dmn=time,1 --cnk_dmn=lat,{config.lat_chk} --cnk_dmn=lon,{config.lon_chk} {tmpfile}_remapped.nc {tmpfile}_chunked.nc"
+        f"ncks -O -4 -D 4 --cnk_plc=g3d --cnk_dmn=time,1 --cnk_dmn=lat,{lat_chk} --cnk_dmn=lon,{lon_chk} {tmpfile}_remapped.nc {tmpfile}_chunked.nc"
     )
     os.system(
         f'ncrename -O -v {era5_info["short_name"]},{era5_info["cmip_name"]} {tmpfile}_chunked.nc {outfile}'
@@ -115,135 +118,116 @@ def convert_era5_to_cmip(tmp_outfile, outfile, config, era5_info, year, month):
 # -------------------------------------------------
 
 
-def main():
-    # -------------------------------------------------
-    # Read config
-    # -------------------------------------------------
-    cfg = read_config("configs", "era5_2D_dkrz_config.ini")
-    logger.info(f"Read configuration is: {cfg}")
-    print(f"Read configuration is: {cfg}")
+def main(var, year, month, config):
+
+    print(f"Downloading and processing: {var}, {year}, {month}")
+
+    overwrite = config['case']['overwrite']
+    download_dir = config['paths']['download_dir']
+
+    grib_path = f"{download_dir}/{var}"
+    os.makedirs(grib_path, exist_ok=True)
 
     # -------------------------------------------------
-    # Create directories if do not exist yet
+    # read ERA5_variables.json
     # -------------------------------------------------
-    os.makedirs(cfg.work_path, exist_ok=True)
-    os.makedirs(cfg.path_proc, exist_ok=True)
+    era5_info = read_era5_info(var)
+    logger.info("ERA5 variable info red from json file.")
+    logger.info(f'longname: {era5_info["long_name"]},')
+    logger.info(f'unit: {era5_info["unit"]},')
+    logger.info(f'oldname: {era5_info["param"]},')
+    logger.info(f'cmipname: {era5_info["cmip_name"]},')
+    logger.info(f'cmipunit: {era5_info["cmip_unit"]}.')
 
-    for v, var in enumerate(cfg.variables):
-        grib_path = f"{cfg.path}/{var}"
+    proc_archive = f'{end_dir}/{era5_info["cmip_name"]}/day/native/{year}'
+    os.makedirs(proc_archive, exist_ok=True)
 
-        # -------------------------------------------------
-        # read ERA5_variables.json
-        # -------------------------------------------------
-        era5_info = read_era5_info(var)
-        logger.info("ERA5 variable info red from json file.")
-        logger.info(f'longname: {era5_info["long_name"]},')
-        logger.info(f'unit: {era5_info["unit"]},')
-        logger.info(f'oldname: {era5_info["param"]},')
-        logger.info(f'cmipname: {era5_info["cmip_name"]},')
-        logger.info(f'cmipunit: {era5_info["cmip_unit"]}.')
+    outfile = (
+        f'{proc_archive}/{era5_info["cmip_name"]}_day_era5_{year}{month}.nc'
+    )
 
-        for year in range(cfg.startyr, cfg.endyr + 1):
-            logger.info(f"Processing year {year}.")
+    if outfile.isfile() and not overwrite:
+        logger.info(f'Outfile {outfile} already exists, overwrite {overwrite}, continuing.')
+        return
+    else:
+        t0 = datetime.now()
 
-            t0 = datetime.now()
+        logger.info(f"Copying variable {var}")
+        vparam = era5_info["param"]
 
-            logger.info(f"Copying variable {var}")
-            vparam = era5_info["param"]
+        if int(era5_info["analysis"]) == 1:
+            type = "an"
+            typeid = "00"
+        else:
+            type = "fc"
+            typeid = "12"
 
-            if int(era5_info["analysis"]) == 1:
-                type = "an"
-                typeid = "00"
-            else:
-                type = "fc"
-                typeid = "12"
+        dkrz_path = f"/pool/data/ERA5/E5/sf/{type}/1D/{vparam}"
 
-            dkrz_path = f"/pool/data/ERA5/E5/sf/{type}/{cfg.freq}/{vparam}"
+        iac_path = f"{grib_path}"
 
-            iac_path = f"{grib_path}"
+        os.makedirs(iac_path, exist_ok=True)
 
-            os.makedirs(iac_path, exist_ok=True)
+        logger.info(f"rsync data from  {dkrz_path} to {iac_path}")
+        os.system(
+            f"rsync -av levante:{dkrz_path}/E5sf{typeid}_1D_{year}-{month}_{vparam}.* {iac_path}"
+        )
 
-            logger.info(f"rsync data from  {dkrz_path} to {iac_path}")
-            os.system(
-                f"rsync -av levante:{dkrz_path}/E5sf{typeid}_{cfg.freq}_{year}-??_{vparam}.* {iac_path}"
+        dt = datetime.now() - t0
+        logger.info(f"Success! All data copied in {dt}")
+
+
+        grib_file = f'{grib_path}/E5sf{typeid}_{cfg.freq}_{year}-{month}_{era5_info["param"]}.grb'
+
+        tmp_outfile = convert_netcdf_add_era5_info(
+            grib_file, work_dir, era5_info, year, month
+        )
+
+        # check if unit needs to be changed from era5 variable to cmip variable
+        if era5_info["unit"] != era5_info["cmip_unit"]:
+            logger.info(
+                f'Unit for {era5_info["short_name"]} needs to be changed from {era5_info["unit"]} to {era5_info["cmip_unit"]}.'
             )
-
-            dt = datetime.now() - t0
-            logger.info(f"Success! All data copied in {dt}")
-
-            proc_archive = f'{cfg.path_proc}/{era5_info["cmip_name"]}/day/native/{year}'
-            os.makedirs(proc_archive, exist_ok=True)
-
-            for month in [
-                "01",
-                "02",
-                "03",
-                "04",
-                "05",
-                "06",
-                "07",
-                "08",
-                "09",
-                "10",
-                "11",
-                "12",
-            ]:
-                outfile = (
-                    f'{proc_archive}/{era5_info["cmip_name"]}_day_era5_{year}{month}.nc'
+            if var == "tcc":
+                tmp_outfile = convert_tcc(
+                    tmp_outfile, work_dir, era5_info, year, month
                 )
-
-                grib_file = f'{grib_path}/E5sf{typeid}_{cfg.freq}_{year}-{month}_{era5_info["param"]}.grb'
-
-                tmp_outfile = convert_netcdf_add_era5_info(
-                    grib_file, cfg.work_path, era5_info, year, month
+            elif var == "tp":
+                tmp_outfile = convert_tp(
+                    tmp_outfile, work_dir, era5_info, year, month
                 )
-
-                # check if unit needs to be changed from era5 variable to cmip variable
-                if era5_info["unit"] != era5_info["cmip_unit"]:
-                    logger.info(
-                        f'Unit for {era5_info["short_name"]} needs to be changed from {era5_info["unit"]} to {era5_info["cmip_unit"]}.'
-                    )
-                    if var == "tcc":
-                        tmp_outfile = convert_tcc(
-                            tmp_outfile, cfg.work_path, era5_info, year, month
-                        )
-                    elif var == "tp":
-                        tmp_outfile = convert_tp(
-                            tmp_outfile, cfg.work_path, era5_info, year, month
-                        )
-                    elif var == "ssrd" or var == "strd" or var == "str":
-                        tmp_outfile = convert_radiation(
-                            tmp_outfile, cfg.work_path, era5_info, year, month
-                        )
-                    else:
-                        logger.error(
-                            f"Conversion of unit for variable {var} is not implemented!"
-                        )
-                        sys.exit(1)
-
-                outfile_name = convert_era5_to_cmip(
-                    tmp_outfile, outfile, cfg, era5_info, year, month
+            elif var == "ssrd" or var == "strd" or var == "str":
+                tmp_outfile = convert_radiation(
+                    tmp_outfile, work_dir, era5_info, year, month
                 )
-
-                logger.info(f"File {outfile_name} written.")
-
-                # calculate monthly mean
-                proc_mon_archive = (
-                    f'{cfg.path_proc}/{era5_info["cmip_name"]}/mon/native/{year}'
+            else:
+                logger.error(
+                    f"Conversion of unit for variable {var} is not implemented!"
                 )
-                os.makedirs(proc_mon_archive, exist_ok=True)
-                outfile_mon = (
-                    f'{proc_mon_archive}/{era5_info["cmip_name"]}_mon_era5_{year}{month}.nc'
-                )
-                os.system(f"cdo monmean {outfile_name} {outfile_mon}")
+                sys.exit(1)
 
-                # -------------------------------------------------
-                # Clean up
-                # -------------------------------------------------
-                os.system(f"rm {cfg.work_path}/{var}_*")
-                os.system(f"rm {cfg.work_path}/tmp_{var}_*")
-            os.system(f"rm {grib_path}/*")
+        outfile_name = convert_era5_to_cmip(
+            tmp_outfile, outfile, config, era5_info, year, month
+        )
+
+        logger.info(f"File {outfile_name} written.")
+
+        # calculate monthly mean
+        proc_mon_archive = (
+            f'{cfg.path_proc}/{era5_info["cmip_name"]}/mon/native/{year}'
+        )
+        os.makedirs(proc_mon_archive, exist_ok=True)
+        outfile_mon = (
+            f'{proc_mon_archive}/{era5_info["cmip_name"]}_mon_era5_{year}{month}.nc'
+        )
+        os.system(f"cdo monmean {outfile_name} {outfile_mon}")
+
+        # -------------------------------------------------
+        # Clean up
+        # -------------------------------------------------
+        os.system(f"rm {cfg.work_path}/{var}_*")
+        os.system(f"rm {cfg.work_path}/tmp_{var}_*")
+        os.system(f"rm {grib_path}/*")
 
 
 if __name__ == "__main__":
