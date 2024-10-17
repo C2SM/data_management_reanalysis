@@ -130,7 +130,7 @@ def main():
     os.makedirs(cfg.path_proc, exist_ok=True)
 
     for v, var in enumerate(cfg.variables):
-        grib_path = f"{cfg.path}/{var}"
+        grib_path = f"{cfg.path}/{var}/"
 
         # -------------------------------------------------
         # read ERA5_variables.json
@@ -149,7 +149,8 @@ def main():
             t0 = datetime.now()
 
             logger.info(f"Copying variable {var}")
-            vparam = era5_info["param"]
+            param = int(era5_info["param"])
+            vparam = f"{param:03}"
 
             if int(era5_info["analysis"]) == 1:
                 type = "an"
@@ -193,7 +194,7 @@ def main():
                     f'{proc_archive}/{era5_info["cmip_name"]}_day_era5_{year}{month}.nc'
                 )
 
-                grib_file = f'{grib_path}/E5sf{typeid}_{cfg.freq}_{year}-{month}_{era5_info["param"]}.grb'
+                grib_file = f'{grib_path}E5sf{typeid}_{cfg.freq}_{year}-{month}_{vparam}.grb'
 
                 tmp_outfile = convert_netcdf_add_era5_info(
                     grib_file, cfg.work_path, era5_info, year, month
@@ -238,12 +239,12 @@ def main():
                 )
                 os.system(f"cdo monmean {outfile_name} {outfile_mon}")
 
-                # -------------------------------------------------
-                # Clean up
-                # -------------------------------------------------
-                os.system(f"rm {cfg.work_path}/{var}_*")
-                os.system(f"rm {cfg.work_path}/tmp_{var}_*")
-            os.system(f"rm {grib_path}/*")
+            # -------------------------------------------------
+            # Clean up
+            # -------------------------------------------------
+            os.system(f"rm {cfg.work_path}/{var}_*")
+            os.system(f"rm {cfg.work_path}/tmp_{var}_*")
+        os.system(f"rm {grib_path}/*")
 
 
 if __name__ == "__main__":
