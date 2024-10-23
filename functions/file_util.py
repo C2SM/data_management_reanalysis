@@ -9,7 +9,6 @@ Purpose: utility functions to process ERA5 data downloaded from dkrz
 import json
 import os
 
-
 class Config:
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
