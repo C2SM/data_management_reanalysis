@@ -18,7 +18,7 @@ paths:
 time:
   startyr: 2024
   endyr: 2024
-  months: 01, 02, 03
+#  months: 01, 02, 03 # list of months to be processed, if not given everything available is processed
 
 chunking:
   time_chk: 1
