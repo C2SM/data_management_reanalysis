@@ -46,7 +46,22 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def download_data_dkrz(var, freq, family, level, year, era5_info, origin, iac_path):
+def convert_month_list(config_month_list):
+    """
+    Convert comma separated month numbers from config file into list
+
+    Input:
+        01, 02, 03,
+
+    Returns:
+        list: ["01", "02", "03"]
+    """
+    config_month_list = config_month_list.replace('"', "").strip()
+    if "," in config_month_list:
+        month_list = [item.strip() for item in config_month_list.split(",")]
+    return month_list
+
+def download_data_dkrz(var, freq, year, era5_info, origin, iac_path, months, all_months):
     """
     Download data from DKRZ
     """
@@ -66,10 +81,17 @@ def download_data_dkrz(var, freq, family, level, year, era5_info, origin, iac_pa
     os.makedirs(iac_path, exist_ok=True)
 
     logger.info(f"rsync data from  {dkrz_path} to {iac_path}")
-    files_to_copy = f'{dkrz_path}/{family}{level}{typeid}_{freq}_{year}-??_{vparam}.*'
-    os.system(
-        f"rsync -av levante:{files_to_copy} {iac_path}"
-    )
+    if all_months:
+        files_to_copy = f'{dkrz_path}/*_{year}-??_{vparam}.*'
+        os.system(
+            f"rsync -av levante:{files_to_copy} {iac_path}"
+        )
+    else:
+        for month in months:
+            files_to_copy = f'{dkrz_path}/*_{year}-{month}_{vparam}.*'
+            os.system(
+                f"rsync -av levante:{files_to_copy} {iac_path}"
+            )
 
     return typeid, vparam
 
@@ -184,6 +206,22 @@ def main():
     proc_path = config['paths']['proc']
     grib_path = f"{download_path}/{var}/"
 
+    # time span to download and process
+    startyr = config['time']['startyr']
+    endyr = config['time']['endyr']
+
+    # months is optional, can be one month or list of months
+    try:
+        c_months = config['time']['months']
+        months = convert_month_list(c_months)
+        c_months = c_months.replace('"', "").strip()
+        if "," in c_months:
+            months = [item.strip() for item in c_months.split(",")]
+        all_months = False
+    except KeyError:
+        months = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12",]
+        all_months = True
+
     # -------------------------------------------------
     # Create directories if do not exist yet
     # -------------------------------------------------
@@ -193,22 +231,17 @@ def main():
     # -------------------------------------------------
     # read ERA5_variables.json
     # -------------------------------------------------
-    era5_info = read_era5_info(var)
     logger.info("ERA5 variable info red from json file.")
-    logger.info(f'longname: {era5_info["long_name"]},')
-    logger.info(f'unit: {era5_info["unit"]},')
-    logger.info(f'oldname: {era5_info["param"]},')
-    logger.info(f'cmipname: {era5_info["cmip_name"]},')
-    logger.info(f'cmipunit: {era5_info["cmip_unit"]}.')
+    era5_info = read_era5_info(var)
 
 
     # download and process for all years in configuration
-    for year in range(config['time']['startyr'], config['time']['endyr'] + 1):
+    for year in range(startyr, endyr + 1):
         logger.info(f"Processing year {year}.")
         logger.info(f"Copying variable {var}")
 
         if config['dataset']['origin'] == 'dkrz':
-            typeid, vparam = download_data_dkrz(var, freq, family, level, year, era5_info, origin, grib_path)
+            typeid, vparam = download_data_dkrz(var, freq, year, era5_info, origin, grib_path, months, all_months)
             download_success = f"Data download successful!"
         else:
             download_success = f"Warning, download from origin {config['dataset']['origin']} not implemented."
@@ -216,8 +249,8 @@ def main():
 
         proc_archive = f'{proc_path}/{era5_info["cmip_name"]}/day/native/{year}'
         os.makedirs(proc_archive, exist_ok=True)
-
-        months = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12",]
+        proc_mon_archive = proc_archive.replace("day", "mon")
+        os.makedirs(proc_mon_archive, exist_ok=True)
 
         for month in months:
 
@@ -258,10 +291,6 @@ def main():
             logger.info(f"File {outfile_name} written.")
 
             # calculate monthly mean
-            proc_mon_archive = (
-                f'{proc_path}/{era5_info["cmip_name"]}/mon/native/{year}'
-            )
-            os.makedirs(proc_mon_archive, exist_ok=True)
             outfile_mon = (
                 f'{proc_mon_archive}/{era5_info["cmip_name"]}_mon_era5_{year}{month}.nc'
             )
