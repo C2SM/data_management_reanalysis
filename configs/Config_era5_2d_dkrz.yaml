@@ -1,10 +1,10 @@
 ---
 dataset:
   name: ERA5
-  origin: dkrz
+  store: dkrz
 
 variables:
-  varname: v10
+  varname: tcc
   freq: 1D
   family: E5
   level: sf
@@ -18,7 +18,7 @@ paths:
 time:
   startyr: 2024
   endyr: 2024
-#  months: 01, 02, 03 # list of months to be processed, if not given everything available is processed
+  months: 01, 02 #, 03 # list of months to be processed, if not given everything available is processed
 
 chunking:
   time_chk: 1
