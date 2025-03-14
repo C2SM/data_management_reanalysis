@@ -13,7 +13,7 @@ paths:
   origin: derived-era5-single-levels-daily-statistics
   download: /net/nitrogen/c2sm-scratch/rlorenz/era5_cds
   work: /net/nitrogen/c2sm-scratch/rlorenz/era5_cds/work
-  proc: /net/atmos/data/era5_cds/processed/v2/
+  proc: /net/atmos/data/era5_cds/processed/v3/
 
 time:
   startyr: 2024
