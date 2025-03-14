@@ -1,3 +1,7 @@
 configs/*.ini
+configs/*.yaml
 logfiles/*
 functions/__pycache__/*
+
+*.nc
+*.grib

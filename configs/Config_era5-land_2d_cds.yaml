@@ -1,0 +1,30 @@
+---
+dataset:
+  name: ERA5-Land
+  store: cds
+
+variables:
+  varname: d2m
+  freq: 1D
+  family: E5
+  level: sf
+
+paths:
+  origin: derived-era5-land-daily-statistics
+  download: /net/nitrogen/c2sm-scratch/rlorenz/era5-land_cds
+  work: /net/nitrogen/c2sm-scratch/rlorenz/era5-land_cds/work
+  proc: /net/atmos/data/era5-land_cds/processed/v2/
+
+time:
+  startyr: 1950
+  endyr: 1950
+  #months: 01 # list of months to be processed, if not given everything available is processed
+
+chunking:
+  time_chk: 1
+  lat_chk: 46
+  lon_chk: 22
+
+flags:
+  overwrite: True
+

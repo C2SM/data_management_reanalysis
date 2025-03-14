@@ -8,7 +8,9 @@ Purpose: utility functions to process ERA5 data downloaded from dkrz
 """
 import json
 import os
+import logging
 
+logger = logging.getLogger(__name__)
 
 class Config:
     def __init__(self, **kwargs):
@@ -70,5 +72,12 @@ def read_era5_info(vname):
         era5_info["analysis"] = analysis
         era5_info["cmip_name"] = vcmip
         era5_info["cmip_unit"] = unitcmip
+
+
+        logger.info(f'longname: {era5_info["long_name"]},')
+        logger.info(f'unit: {era5_info["unit"]},')
+        logger.info(f'oldname: {era5_info["param"]},')
+        logger.info(f'cmipname: {era5_info["cmip_name"]},')
+        logger.info(f'cmipunit: {era5_info["cmip_unit"]}.')
 
     return era5_info

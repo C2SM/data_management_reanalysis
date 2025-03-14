@@ -1,0 +1,30 @@
+---
+dataset:
+  name: ERA5
+  store: dkrz
+
+variables:
+  varname: tcc
+  freq: 1D
+  family: E5
+  level: sf
+
+paths:
+  origin: /pool/data/ERA5/E5/sf/
+  download: /net/nitrogen/c2sm-scratch/rlorenz/era5_dkrz
+  work: /net/nitrogen/c2sm-scratch/rlorenz/era5_dkrz/work
+  proc: /net/co2/c2sm-data/rlorenz/ERA5_test
+
+time:
+  startyr: 2024
+  endyr: 2024
+  months: 01, 02 #, 03 # list of months to be processed, if not given everything available is processed
+
+chunking:
+  time_chk: 1
+  lat_chk: 46
+  lon_chk: 22
+
+flags:
+  overwrite: False
+
