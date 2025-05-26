@@ -1,0 +1,48 @@
+{
+  "---------" : ["---------------------------------------------------" , "---------------------" , "-------" , "-------" , "--" , "--" , "--------" , "--------"],
+  "ShortName" : ["VariableNameInCDS                                  " , "Units"                 , "ParamID" , "LevType" , "An" , "Fc" , "CMIPName", "CMIPUnits"],
+  "---------" : ["---------------------------------------------------" , "---------------------" , "-------" , "-------" , "--" , "--" , "--------" , "--------"],
+  "msl"       : ["mean_sea_level_pressure"                             , "Pa"                    , "151"     , "sfc"     , "1"  , "1"  , "psl"      , "Pa"      ],
+  "tcc"       : ["total_cloud_cover"                                   , "(0 - 1)"               , "164"     , "sfc"     , "1"  , "1"  , "clt"      , "%"       ],
+  "2t"        : ["2m_temperature"                                      , "K"                     , "167"     , "sfc"     , "1"  , "1"  , "tas"      , "K"       ],
+  "2r"        : ["2m_relative_humidity"                                , "%"                     , "242"     , "sfc"     , "1"  , "1"  , "hurs"     , "%"       ],
+  "skt"       : ["skin_temperature"                                    , "K"                     , "198"     , "sfc"     , "1"  , "1"  , "ts"       , "K"       ],
+  "sp"        : ["surface_pressure"                                    , "Pa"                    , "134"     , "sfc"     , "1"  , "1"  , "ps"       , "Pa"      ],
+  "sde"       : ["snow_depth"                                          , "m"                     , "3066"    , "sfc"     , "1"  , "1"  , "snd"      , "m of water equivalent"],
+  "sd"        : ["snow_depth_water_equivalent"                         , "m of water equivalent" , "141"     , "sfc"     , "1"  , "1"  , "sd"       , "m"       ],
+  "10si"      : ["10m_wind_speed"                                      , "m s-1"                 , "207"     , "sfc"     , "1"  , "1"  , "sfcWind"  , "m s-1" ],
+  "10wdir"    : ["10m_wind_direction"                                  , "Degree true North"     , "260"     , "sfc"     , "1"  , "1"  , "10wdir"   , "Degree true North" ],
+  "---------" : ["---------------------------------------------------" , "---------------------" , "-------" , "-------" , "--" , "--" , "--------" , "--------"],
+  "slhf"      : ["surface_latent_heat_flux"                            , "J m-2"                 , "147"     , "sfc"     , "0"  , "1"  , "hfls"     , "W m-2"   ],
+  "sshf"      : ["surface_sensible_heat_flux"                          , "J m-2"                 , "146"     , "sfc"     , "0"  , "1"  , "hfss"     , "W m-2"   ],
+  "strd"      : ["surface_thermal_radiation_downwards"                 , "J m-2"                 , "175"     , "sfc"     , "0"  , "1"  , "strd"     , "W m-2"   ],
+  "ssrd"      : ["surface_solar_radiation_downwards"                   , "J m-2"                 , "169"     , "sfc"     , "0"  , "1"  , "rsds"     , "W m-2"   ],
+  "ssr"       : ["surface_net_solar_radiation"                         , "J m-2"                 , "176"     , "sfc"     , "0"  , "1"  , "ssr"      , "W m-2"   ],
+  "str"       : ["surface_net_thermal_radiation"                       , "J m-2"                 , "177"     , "sfc"     , "0"  , "1"  , "rls"      , "W m-2"   ],
+  "eva"       : ["evaporation"                                         , "m of water equivalent" , "182"     , "sfc"     , "0"  , "1"  , "e"        , "m of water equivalent"],
+  "tp"        : ["total_precipitation"                                 , "m"                     , "228"     , "sfc"     , "0"  , "1"  , "pr"       , "kg m-2 s-1"],
+  "smlt"      : ["snowmelt"                                            , "m of water equivalent" , "45"      , "sfc"     , "0"  , "1"  , "snm"      , "kg m-2 s-1"],
+  "sf"        : ["snow_fall_water_equivalent"                          , "m of water equivalent" , "144"     , "sfc"     , "0"  , "1"  , "sf"       , "m of water equivalent"],
+  "fscov"     : ["fraction_of_snow_cover"                              , "-"                     , "289"     , "sfc"     , "0"  , "1"  , "snc"      , "%"       ],
+  "mx2t"      : ["maximum_2m_temperature_since_previous_post_processing", "K"                    , "201"     , "sfc"     , "0"  , "1"  , "tasmax"   , "K"       ],
+  "mn2t"      : ["minimum_2m_temperature_since_previous_post_processing", "K"                    , "202"     , "sfc"     , "0"  , "1"  , "tasmin"   , "K"       ],
+  "---------" : ["---------------------------------------------------" , "---------------------" , "-------" , "-------" , "--" , "--" , "--------" , "--------"],
+  "vsw"       : ["volumetric_soil_moisture"                            , "m3 m-3"                , "210"     , "sfc"     , "1"  , "0"  , "vsw"      , "m3 m-3"  ],
+  "liqvsw"    : ["liquid_volumetric_soil_moisture"                     , "m3 m-3"                , "199"     , "sfc"     , "1"  , "0"  , "liqvsw"   , "m3 m-3"  ],
+  "---------" : ["---------------------------------------------------" , "---------------------" , "-------" , "-------" , "--" , "--" , "--------" , "--------"],
+  "q"         : ["specific_humidity"                                   , "kg kg-1"               , "133"     , "pl"      , "1"  , "1"  , "hus"      , "(0 - 1)" ],
+  "r"         : ["relative_humidity"                                   , "%"                     , "157"     , "pl"      , "1"  , "1"  , "hur"      , "%"       ],
+  "t"         : ["temperature"                                         , "K"                     , "130"     , "pl"      , "1"  , "1"  , "ta"       , "K"       ],
+  "u"         : ["u_component_of_wind"                                 , "m s-1"                 , "131"     , "pl"      , "1"  , "1"  , "ua"       , "m s-1"   ],
+  "v"         : ["v_component_of_wind"                                 , "m s-1"                 , "132"     , "pl"      , "1"  , "1"  , "va"       , "m s-1"   ],
+  "ccl"       : ["cloud_cover"                                         , "%"                     , "257"     , "pl"      , "0"  , "1"  , "cl"       , "%"       ],
+  "z"         : ["geopotential"                                        , "m2 s-2"                , "129"     , "pl"      , "1"  , "1"  , "zg"       , "m"       ],
+  "---------" : ["---------------------------------------------------" , "---------------------" , "-------" , "-------" , "--" , "--" , "--------" , "--------"],
+  "lsm"       : ["land_sea_mask"                                       , "(0 - 1)"               , "172"     , "sfc"     , "1"  , "0"  , "lsm"      , "-"       ],
+  "orog"      : ["orography"                                           , "m"                     , "002"     , "sfc"     , "1"  , "0"  , "orog"     , "m"       ]
+}
+
+
+
+
+
