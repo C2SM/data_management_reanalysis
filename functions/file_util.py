@@ -62,6 +62,7 @@ def read_era5_info(vname):
         vunit = era5[vname][1]
         vparam = era5[vname][2]
         analysis = era5[vname][4]
+        forecast = era5[vname][5]
         vcmip = era5[vname][6]
         unitcmip = era5[vname][7]
 
