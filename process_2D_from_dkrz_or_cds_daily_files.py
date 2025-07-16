@@ -14,6 +14,7 @@ Purpose: process ERA5 data downloaded from dkrz
 # -------------------------------------------------
 import logging
 import os
+import subprocess
 import sys
 import time
 import argparse
@@ -23,6 +24,7 @@ import cdsapi
 import xarray as xr
 from functions.file_util import read_era5_info
 from functions.read_config import read_yaml_config
+from functions.general_functions import *
 
 # -------------------------------------------------
 # Create a simple logger
@@ -95,20 +97,37 @@ def download_data_dkrz(freq, era5_info, origin, iac_path, year, months, all_mont
     logger.info(f"rsync data from  {dkrz_path} to {iac_path}")
     if all_months:
         files_to_copy = f'{dkrz_path}/*_{year}-??_{vparam}.*'
-        os.system(
-            f"rsync -av levante:{files_to_copy} {iac_path}"
-        )
+        try:
+            cmd = [
+                "rsync",
+                "-av",
+                f"levante:{files_to_copy}",
+                f"{iac_path}"
+            ]
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Command failed with return code {e.returncode}")
+            print(f"Standard output:\n{e.stdout}")
+            print(f"Standard error:\n{e.stderr}")
     else:
         for month in months:
-            files_to_copy = f'{dkrz_path}/*_{year}-{month}_{vparam}.*'
-            os.system(
-                f"rsync -av levante:{files_to_copy} {iac_path}"
-            )
+            try:
+                cmd = [
+                    "rsync",
+                    "-av",
+                    f"levante:{files_to_copy}",
+                    f"{iac_path}"
+                ]
+                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Command failed with return code {e.returncode}")
+                print(f"Standard output:\n{e.stdout}")
+                print(f"Standard error:\n{e.stderr}")
     gribfile = f'{iac_path}{family}{level}{typeid}_{freq}_{year}-MM_{vparam}.grb'
     return gribfile
 
 
-def download_data_cds(era5_info, origin, workdir, year, months, overwrite):
+def download_data_cds(dataname, era5_info, origin, workdir, year, months, overwrite):
     """
     Download data from CDS
 
@@ -120,7 +139,7 @@ def download_data_cds(era5_info, origin, workdir, year, months, overwrite):
 
     longname = era5_info["long_name"]
 
-    target_allg = f'{workdir}/{era5_info["short_name"]}_era5_{year}MM.nc'
+    target_allg = f'{workdir}/{era5_info["short_name"]}_{dataname}_{year}MM.nc'
 
     for month in months:
 
@@ -161,24 +180,74 @@ def download_data_cds(era5_info, origin, workdir, year, months, overwrite):
     return target_allg
 
 
-def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, year, month):
+def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, dataname, year, month):
     """
     Convert grib file to netcdf
 
     use grib_to_netcdf, adds meaningful variable name and time dimension
     incl. standard_name and long_name
     """
+    # define input and output filenames
+    tmpfile = f'{workdir}/tmp_var{era5_info["param"]}_{dataname}_{year}{month}'
+    tmp_outfile = f'{workdir}/tmp2_{era5_info["short_name"]}_{dataname}_{year}{month}.nc'
 
-    tmpfile = f'{workdir}/tmp_var{era5_info["param"]}_era5_{year}{month}'
-    tmp_outfile = f'{workdir}/tmp2_{era5_info["short_name"]}_era5_{year}{month}.nc'
-    os.system(f"cdo -t ecmwf -setgridtype,regular {grib_file} {tmpfile}.grib")
-    os.system(f"grib_to_netcdf -o  {tmpfile}.nc {tmpfile}.grib")
-    os.system(f"ncrename -d latitude,lat -d longitude,lon -v latitude,lat -v longitude,lon {tmpfile}.nc {tmp_outfile}")
+    # Set grid type to ecmwf regular, otherwise grib_to_netcdf will fail
+    #os.system(f"cdo -t ecmwf -setgridtype,regular {grib_file} {tmpfile}.grib")
+    try:
+        cmd = [
+            "cdo",
+            "-t",
+            "ecmwf",
+            "-setgridtype,regular",
+            f"{grib_file}",
+            f"{tmpfile}.grib"
+        ]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+        print(f"Standard error:\n{e.stderr}")
+
+    #os.system(f"grib_to_netcdf -o  {tmpfile}.nc {tmpfile}.grib")
+    try:
+        cmd = [
+            "grib_to_netcdf",
+            "-o",
+            f"{tmpfile}.nc",
+            f"{tmpfile}.grib"
+        ]
+        result_g_n = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+        print(f"Standard error:\n{e.stderr}")
+
+    # rename latitude and longitude dimensions and variables
+    #os.system(f"ncrename -d latitude,lat -d longitude,lon -v latitude,lat -v longitude,lon {tmpfile}.nc {tmp_outfile}")
+    try:
+        cmd = [
+            "ncrename",
+            "-d",
+            "latitude,lat",
+            "-d",
+            "longitude,lon",
+            "-v",
+            "latitude,lat",
+            "-v",
+            "longitude,lon",
+            f"{tmpfile}.nc",
+            f"{tmp_outfile}"
+        ]
+        result_ncren = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+        print(f"Standard error:\n{e.stderr}")
 
     return tmp_outfile
 
 
-def convert_valid_time_latitude_longitude(ncfile, workdir, era5_info, year, month):
+def convert_valid_time_latitude_longitude(ncfile, workdir, era5_info, dataname, year, month):
     """
     Convert netcdf to same structure as netcdf converted from grib using grib_to_netcdf
 
@@ -206,69 +275,105 @@ def convert_valid_time_latitude_longitude(ncfile, workdir, era5_info, year, mont
         "lon": {"_FillValue": None},
     }
 
-    tmp_outfile = f'{workdir}/tmp3_{era5_info["short_name"]}_era5_{year}{month}.nc'
+    tmp_outfile = f'{workdir}/tmp3_{era5_info["short_name"]}_{dataname}_{year}{month}.nc'
 
     ds.to_netcdf(tmp_outfile, unlimited_dims="time", encoding=encoding, format='NETCDF4')
 
     return tmp_outfile
 
 
-def convert_tcc(tcc_outfile, workdir, era5_info, year, month):
-    os.system(
-        f'cdo -b F64 mulc,100 {tcc_outfile} {workdir}/{era5_info["short_name"]}_era5_{year}{month}_mulc.nc'
-    )
-    os.system(f'rm {tcc_outfile}')
-    os.system(
-        f'ncatted -a units,{era5_info["short_name"]},m,c,"{era5_info["cmip_unit"]}" {workdir}/{era5_info["short_name"]}_era5_{year}{month}_mulc.nc {tcc_outfile}'
-    )
-
-    return tcc_outfile
-
-
-def convert_tp(tp_outfile, workdir, era5_info, year, month):
-    os.system(
-        f'cdo -b F64 divc,86400 {tp_outfile} {workdir}/{era5_info["short_name"]}_era5_{year}{month}_divc.nc'
-    )
-    os.system(f'rm {tp_outfile}')
-    os.system(
-        f'ncatted -a units,{era5_info["short_name"]},m,c,"{era5_info["cmip_unit"]}" {workdir}/{era5_info["short_name"]}_era5_{year}{month}_divc.nc {tp_outfile}'
-    )
-
-    return tp_outfile
-
-
-def convert_radiation(rad_outfile, workdir, era5_info, year, month):
-    os.system(
-        f'cdo -b F64 divc,86400 {rad_outfile} {workdir}/{era5_info["short_name"]}_era5_{year}{month}_divc.nc'
-    )
-    os.system(f'rm {rad_outfile}')
-    os.system(
-        f'ncatted -a units,{era5_info["short_name"]},m,c,"{era5_info["cmip_unit"]}" {workdir}/{era5_info["short_name"]}_era5_{year}{month}_divc.nc {rad_outfile}'
-    )
-
-    return rad_outfile
-
-
-def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, year, month, time_chk, lon_chk, lat_chk):
-    #tmpfile = f'{work_path}/{era5_info["short_name"]}_era5_{year}{month}'
+def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, dataname, year, month, time_chk, lon_chk, lat_chk):
+    #tmpfile = f'{work_path}/{era5_info["short_name"]}_{dataname}_{year}{month}'
     path_to_tmp = Path(tmp_outfile)
     tmpfile = f'{str(path_to_tmp.parent)}/{path_to_tmp.stem}'
-    outfile = f'{proc_archive}/{era5_info["cmip_name"]}_day_era5_{year}{month}.nc'
+    outfile = f'{proc_archive}/{era5_info["cmip_name"]}_day_{dataname}_{year}{month}.nc'
 
     if store == 'dkrz':
-        os.system(
-            f"cdo remapcon,/net/atmos/data/era5_cds/gridfile_cds_025.txt {tmp_outfile} {tmpfile}_remapped.nc"
-        )
-        os.system(
-            f"ncks -O -4 -D 4 --cnk_plc=g3d --cnk_dmn=time,{time_chk} --cnk_dmn=lat,{lat_chk} --cnk_dmn=lon,{lon_chk} -L 1 {tmpfile}_remapped.nc {tmpfile}_chunked.nc"
-        )
+        #os.system(
+        #    f"cdo remapcon,/net/atmos/data/era5_cds/gridfile_cds_025.txt {tmp_outfile} {tmpfile}_remapped.nc"
+        #)
+        try:
+            cmd = [
+                "cdo",
+                "remapcon,/net/atmos/data/era5_cds/gridfile_cds_025.txt",
+                f"{tmp_outfile}",
+                f"{tmpfile}_remapped.nc"
+            ]
+            result_remap = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Command failed with return code {e.returncode}")
+            print(f"Standard output:\n{e.stdout}")
+        #os.system(
+        #    f"ncks -O -4 -D 4 --cnk_plc=g3d --cnk_dmn=time,{time_chk} --cnk_dmn=lat,{lat_chk} --cnk_dmn=lon,{lon_chk} -L 1 {tmpfile}_remapped.nc {tmpfile}_chunked.nc"
+        #)
+        try:
+            cmd = [
+                "ncks",
+                "-O", "-4", "-D", "4",
+                "--cnk_plc=g3d",
+                f"--cnk_dmn=time,{time_chk}",
+                f"--cnk_dmn=lat,{lat_chk}",
+                f"--cnk_dmn=lon,{lon_chk}",
+                "-L", "1",
+                f"{tmpfile}_remapped.nc",
+                f"{tmpfile}_chunked.nc"
+            ]
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Command failed with return code {e.returncode}")
+            print(f"Standard output:\n{e.stdout}")
     else:
-        os.system(
-            f"ncks -O -4 -D 4 --cnk_plc=g3d --cnk_dmn=time,{time_chk} --cnk_dmn=lat,{lat_chk} --cnk_dmn=lon,{lon_chk} -L 1 {tmp_outfile} {tmpfile}_chunked.nc"
-        )
-    os.system(
-        f'ncrename -O -v {era5_info["short_name"]},{era5_info["cmip_name"]} {tmpfile}_chunked.nc {outfile}'
-    )
+        #os.system(
+        #    f"ncks -O -4 -D 4 --cnk_plc=g3d --cnk_dmn=time,{time_chk} --cnk_dmn=lat,{lat_chk} --cnk_dmn=lon,{lon_chk} -L 1 {tmp_outfile} {tmpfile}_chunked.nc"
+        #)
+        try:
+            cmd = [
+                "ncks",
+                "-O", "-4", "-D", "4",
+                "--cnk_plc=g3d",
+                f"--cnk_dmn=time,{time_chk}",
+                f"--cnk_dmn=lat,{lat_chk}",
+                f"--cnk_dmn=lon,{lon_chk}",
+                "-L", "1",
+                f"{tmp_outfile}",
+                f"{tmpfile}_chunked.nc"
+            ]
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Command failed with return code {e.returncode}")
+            print(f"Standard output:\n{e.stdout}")
+    try:
+        cmd = [
+            "ncrename",
+            "-O",
+            "-v",
+            f'{era5_info["short_name"]},{era5_info["cmip_name"]}',
+            f"{tmpfile}_chunked.nc",
+            f"{outfile}"
+        ]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+        if era5_info["short_name"]=='2t':
+            print(f"Try with using t2m instead 2t.")
+            try:
+                cmd = [
+                    "ncrename",
+                    "-O",
+                    "-v",
+                    f't2m,{era5_info["cmip_name"]}',
+                    f"{tmpfile}_chunked.nc",
+                    f"{outfile}"
+                ]
+                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Command failed with return code {e.returncode}")
+                print(f"Standard output:\n{e.stdout}")
+
+    #os.system(
+    #    f'ncrename -O -v {era5_info["short_name"]},{era5_info["cmip_name"]} {tmpfile}_chunked.nc {outfile}'
+    #)
 
     return outfile
 
@@ -301,6 +406,7 @@ def main():
     logger.info(f"Read configuration as {config}")
 
     store = config['dataset']['store']
+    dataname = config['dataset']['name'].lower()
 
     # variable to be processed
     var = config['variables']['varname']
@@ -342,7 +448,7 @@ def main():
     # -------------------------------------------------
     # read ERA5_variables.json
     # -------------------------------------------------
-    logger.info("ERA5 variable info red from json file.")
+    logger.info(f"{config['dataset']['name']} variable info red from json file.")
     era5_info = read_era5_info(var)
 
 
@@ -358,7 +464,7 @@ def main():
             download_success = f"Data download successful!"
         elif store == 'cds':
             download_file = download_data_cds(
-                era5_info=era5_info, origin=origin, workdir=work_path, year=year, months=months, overwrite=overwrite)
+                dataname=dataname, era5_info=era5_info, origin=origin, workdir=work_path, year=year, months=months, overwrite=overwrite)
             download_success = f"Data download successful!"
         else:
             download_success = f"Warning, download from store {store} not implemented."
@@ -376,11 +482,11 @@ def main():
             file = download_file.replace("MM", month)
             if file.endswith('.grb'):
                 tmp_outfile = convert_netcdf_add_era5_info(
-                    file, work_path, era5_info, year, month
+                    file, work_path, era5_info, dataname, year, month
                 )
             else:
                 tmp_outfile = convert_valid_time_latitude_longitude(
-                    file, work_path, era5_info, year, month)
+                    file, work_path, era5_info, dataname, year, month)
             print(tmp_outfile)
 
             # check if unit needs to be changed from era5 variable to cmip variable
@@ -390,15 +496,15 @@ def main():
                 )
                 if var == "tcc":
                     tmp_outfile = convert_tcc(
-                        tmp_outfile, work_path, era5_info, year, month
+                        tmp_outfile, work_path, era5_info, dataname, year, month
                     )
                 elif var == "tp":
                     tmp_outfile = convert_tp(
-                        tmp_outfile, work_path, era5_info, year, month
+                        tmp_outfile, work_path, era5_info, dataname, year, month
                     )
-                elif var == "ssrd" or var == "strd" or var == "str":
+                elif var == "ssrd" or var == "strd" or var == "str" or var == "ssr":
                     tmp_outfile = convert_radiation(
-                        tmp_outfile, work_path, era5_info, year, month
+                        tmp_outfile, work_path, era5_info, dataname, year, month
                     )
                 else:
                     logger.error(
@@ -408,23 +514,35 @@ def main():
 
 
             outfile_name = convert_era5_to_cmip(
-                tmp_outfile, store, proc_archive, era5_info, year, month,
+                tmp_outfile, store, proc_archive, era5_info, dataname, year, month,
                 config['chunking']['time_chk'], config['chunking']['lon_chk'], config['chunking']['lat_chk']
             )
             logger.info(f"File {outfile_name} written.")
 
             # calculate monthly mean
             outfile_mon = (
-                f'{proc_mon_archive}/{era5_info["cmip_name"]}_mon_era5_{year}{month}.nc'
+                f'{proc_mon_archive}/{era5_info["cmip_name"]}_mon_{dataname}_{year}{month}.nc'
             )
-            os.system(f"cdo monmean {outfile_name} {outfile_mon}")
+            try:
+                cmd = [
+                    "cdo",
+                    "monmean",
+                    f'{outfile_name}',
+                    f'outfile_mon'
+                ]
+                subprocess.run(cmd, check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Command failed with return code {e.returncode}")
+                print(f"Standard output:\n{e.stdout}")
 
         # -------------------------------------------------
         # Clean up
         # -------------------------------------------------
         os.system(f"rm {work_path}/{var}_*")
         os.system(f"rm {work_path}/tmp*")
-        os.system(f"rm {grib_path}/*")
+        if store == 'dkrz':
+            os.system(f"rm {grib_path}/*")
+
 
 
 if __name__ == "__main__":

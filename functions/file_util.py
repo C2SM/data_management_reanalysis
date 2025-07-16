@@ -82,3 +82,51 @@ def read_era5_info(vname):
         logger.info(f'cmipunit: {era5_info["cmip_unit"]}.')
 
     return era5_info
+
+# -------------------------------------------------
+# Read ERA5 info from JSON file
+# -------------------------------------------------
+
+
+def read_cerra_info(vname):
+    """
+    Loading CERRA variables's information as
+    python Dictionary from JSON file
+
+    Input:
+    a string with the CERRA variable short name to be processed
+
+    Return:
+    dict with variable infos
+    """
+    cerra_info = dict()
+
+    with open("CERRA_variables.json", "r") as jf:
+        cerra = json.load(jf)
+        # Variable's long-name, param and unit
+        vlong = cerra[vname][0]
+        vunit = cerra[vname][1]
+        vparam = cerra[vname][2]
+        analysis = cerra[vname][4]
+        forecast = cerra[vname][5]
+        vcmip = cerra[vname][6]
+        unitcmip = cerra[vname][7]
+        aggmethod = cerra[vname][8]
+
+        cerra_info["short_name"] = vname
+        cerra_info["long_name"] = vlong
+        cerra_info["unit"] = vunit
+        cerra_info["param"] = vparam
+        cerra_info["analysis"] = analysis
+        cerra_info["cmip_name"] = vcmip
+        cerra_info["cmip_unit"] = unitcmip
+        cerra_info["agg_method"] = aggmethod
+
+
+        logger.info(f'longname: {cerra_info["long_name"]},')
+        logger.info(f'unit: {cerra_info["unit"]},')
+        logger.info(f'oldname: {cerra_info["param"]},')
+        logger.info(f'cmipname: {cerra_info["cmip_name"]},')
+        logger.info(f'cmipunit: {cerra_info["cmip_unit"]}.')
+
+    return cerra_info
