@@ -355,6 +355,7 @@ def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, dataname, 
     except subprocess.CalledProcessError as e:
         print(f"Command failed with return code {e.returncode}")
         print(f"Standard output:\n{e.stdout}")
+
         if era5_info["short_name"]=='2t':
             print(f"Try with using t2m instead 2t.")
             try:

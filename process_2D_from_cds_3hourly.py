@@ -13,6 +13,7 @@ Purpose: process CERRA data downloaded from CDS
 # -------------------------------------------------
 import logging
 import os
+import subprocess
 import sys
 import time
 import argparse
@@ -107,8 +108,18 @@ def download_data_cds_an(dataname, cerra_info, origin, workdir, year, months, ov
 
             client = cdsapi.Client()
             client.retrieve(dataset, request, grib_file)
-            os.system(f'cdo -f nc copy {grib_file} {target}')
-            os.system(f'rm {grib_file}')
+
+            cdo.copy(options =  "-f nc", input=grib_file, output=target)
+
+            try:
+                cmd = [
+                    'rm',
+                    f'{grib_file}'
+                ]
+                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Command failed with return code {e.returncode}")
+                print(f"Standard output:\n{e.stdout}")
 
     return target_allg
 
@@ -170,24 +181,65 @@ def download_data_cds_fc(dataname, cerra_info, origin, workdir, year, months, ov
 
             client = cdsapi.Client()
             client.retrieve(dataset, request, grib_file)
-            os.system(f'cdo -f nc copy {grib_file} {target}')
-            os.system(f'rm {grib_file}')
+
+            cdo.copy("-f nc", input=grib_file, output=target)
+
+            try:
+                cmd = [
+                    'rm',
+                    f'{gribfile}'
+                ]
+                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Command failed with return code {e.returncode}")
+                print(f"Standard output:\n{e.stdout}")
 
     return target_allg
 
 
 def convert_cerra_to_cmip(tmp_outfile, proc_archive, cerra_info, dataname, year, time_chk, lon_chk, lat_chk):
     #tmpfile = f'{work_path}/{era5_info["short_name"]}_era5_{year}{month}'
+    oldname = cerra_info["short_name"]
+    newname = cerra_info["cmip_name"]
     path_to_tmp = Path(tmp_outfile)
     tmpfile = f'{str(path_to_tmp.parent)}/{path_to_tmp.stem}'
-    outfile = f'{proc_archive}/{cerra_info["cmip_name"]}_day_{cerra_info["agg_method"]}_{dataname.lower()}_{year}.nc'
+    outfile = f'{proc_archive}/{newname}_day_{cerra_info["agg_method"]}_{dataname.lower()}_{year}.nc'
 
-    os.system(
-        f"ncks -O -4 -D 4 --cnk_plc=g3d --cnk_dmn=time,{time_chk} --cnk_dmn=lat,{lat_chk} --cnk_dmn=lon,{lon_chk} -L 1 {tmp_outfile} {tmpfile}_chunked.nc"
-    )
-    os.system(
-        f'ncrename -O -v {cerra_info["short_name"]},{cerra_info["cmip_name"]} {tmpfile}_chunked.nc {outfile}'
-    )
+    #os.system(
+    #    f"ncks -O -4 -D 4 --cnk_plc=g3d --cnk_dmn=time,{time_chk} --cnk_dmn=lat,{lat_chk} --cnk_dmn=lon,{lon_chk} -L 1 {tmp_outfile} {tmpfile}_chunked.nc"
+    #)
+    try:
+        cmd = [
+            "ncks",
+            "-O", "-4", "-D", "4",
+            "--cnk_plc=g3d",
+            f"--cnk_dmn=time,{time_chk}",
+            f"--cnk_dmn=lat,{lat_chk}",
+            f"--cnk_dmn=lon,{lon_chk}",
+            "-L", "1",
+            f"{tmp_outfile}",
+            f"{tmpfile}_chunked.nc"
+        ]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+
+    #os.system(
+    #    f'ncrename -O -v {cerra_info["short_name"]},{cerra_info["cmip_name"]} {tmpfile}_chunked.nc {outfile}'
+    #)
+    try:
+        cmd = [
+            "ncrename",
+            "-O","-v",
+            f"{oldname},{newname}",
+            f"{tmpfile}_chunked.nc",
+            f"{outfile}"
+        ]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
 
     return outfile
 
@@ -281,10 +333,10 @@ def main():
         if store == 'cds':
             if type == "analysis":
                 download_file = download_data_cds_an(
-                    dataname, cerra_info=cerra_info, origin=origin, workdir=work_path, year=year, months=months, overwrite=overwrite)
+                    dataname=dataname, cerra_info=cerra_info, origin=origin, workdir=work_path, year=year, months=months, overwrite=overwrite)
             elif type == "forecast":
                 download_file = download_data_cds_fc(
-                    dataname, cerra_info=cerra_info, origin=origin, workdir=work_path, year=year, months=months, overwrite=overwrite)
+                    dataname=dataname, cerra_info=cerra_info, origin=origin, workdir=work_path, year=year, months=months, overwrite=overwrite)
             else:
                 logger.error(f"Wrong product type, needs to be analysis or forecast, type {type} not available.")
             download_success = f"Data download successful!"
@@ -356,7 +408,7 @@ def main():
         outfile_mon = (
             f'{proc_mon_archive}/{cerra_info["cmip_name"]}_mon_{dataname.lower()}_{year}.nc'
         )
-        os.system(f"cdo monmean {outfile_name} {outfile_mon}")
+        cdo.monmean(input=outfile_name, output=outfile_mon)
 
         # -------------------------------------------------
         # Clean up
