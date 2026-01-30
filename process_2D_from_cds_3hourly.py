@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-File Name : process_2D_frm_cds_3hourly.py
+File Name : process_2D_from_cds_3hourly.py
 Author: Ruth Lorenz (ruth.lorenz@c2sm.ethz.ch)
 Created: 19/05/2025
 Purpose: process CERRA data downloaded from CDS
@@ -22,6 +22,9 @@ from pathlib import Path
 import cdsapi
 import xarray as xr
 from cdo import Cdo
+import numpy as np
+import re
+
 from functions.read_config import read_yaml_config
 from functions.general_functions import *
 from functions.file_util import read_cerra_info
@@ -67,20 +70,26 @@ def download_data_cds_an(dataname, cerra_info, origin, workdir, year, months, ov
     long_name = cerra_info["long_name"]
     data_name = dataname.lower()
 
+    if dataname == "CERRA-Land":
+        level_type="surface"
+    else:
+        level_type="surface_or_atmosphere"
+
     target_allg = f'{workdir}/{cerra_info["short_name"]}_3hr_{data_name}_{year}MM.nc'
 
     for month in months:
 
-        target = target_allg.replace("MM", month)
-        grib_file = target.replace(".nc", ".grib")
-        logger.info(f'NetCDFfile to download is {target}')
+        target_str = target_allg.replace("MM", month)
+        grib_file = target_str.replace(".nc", ".grib")
+        target=Path(target_str)
+        logger.info(f'NetCDFfile to download is {target_str}')
 
         dataset = origin
 
-        if not os.path.isfile(f'{target}') or overwrite:
+        if not target.is_file() or overwrite:
             request = {
                 "variable": [long_name],
-                "level_type": "surface_or_atmosphere",
+                "level_type": [level_type],
                 "data_type": ["reanalysis"],
                 "product_type": ["analysis"],
                 "year": [year],
@@ -109,7 +118,8 @@ def download_data_cds_an(dataname, cerra_info, origin, workdir, year, months, ov
             client = cdsapi.Client()
             client.retrieve(dataset, request, grib_file)
 
-            cdo.copy(options =  "-f nc", input=grib_file, output=target)
+            #cdo.copy(options =  "-f nc", input=grib_file, output=target)
+            py_grib_to_netcdf(grib_file, target)
 
             try:
                 cmd = [
@@ -139,6 +149,11 @@ def download_data_cds_fc(dataname, cerra_info, origin, workdir, year, months, ov
     long_name = cerra_info["long_name"]
     data_name = dataname.lower()
 
+    if dataname == "CERRA-Land":
+        level_type="surface"
+    else:
+        level_type="surface_or_atmosphere"
+
     target_allg = f'{workdir}/{cerra_info["short_name"]}_3hr_{data_name}_{year}MM.nc'
 
     for month in months:
@@ -152,7 +167,7 @@ def download_data_cds_fc(dataname, cerra_info, origin, workdir, year, months, ov
         if not os.path.isfile(f'{target}') or overwrite:
             request = {
                 "variable": [long_name],
-                "level_type": "surface_or_atmosphere",
+                "level_type": [level_type],
                 "data_type": ["reanalysis"],
                 "product_type": ["forecast"],
                 "year": [year],
@@ -182,12 +197,13 @@ def download_data_cds_fc(dataname, cerra_info, origin, workdir, year, months, ov
             client = cdsapi.Client()
             client.retrieve(dataset, request, grib_file)
 
-            cdo.copy("-f nc", input=grib_file, output=target)
+            #cdo.copy("-f nc", input=grib_file, output=target)
+            py_grib_to_netcdf(grib_file, target)
 
             try:
                 cmd = [
                     'rm',
-                    f'{gribfile}'
+                    f'{grib_file}'
                 ]
                 result = subprocess.run(cmd, check=True, capture_output=True, text=True)
             except subprocess.CalledProcessError as e:
@@ -319,17 +335,20 @@ def main():
 
     assert freq=='3hr', "Frequency needs to be 3-hourly, no other download frequencies implemented."
 
-    if int(cerra_info["analysis"]) == 1:
-        type = "analysis"
+    if config['variables']['product']:
+        type = config['variables']['product'].lower()
     else:
-        type = "forecast"
+        if int(cerra_info["analysis"]) == 1:
+            type = "analysis"
+        else:
+            type = "forecast"
     agg_method = cerra_info["agg_method"]
 
     # download and process for all years in configuration
     for year in range(startyr, endyr + 1):
         logger.info(f"Processing year {year}.")
 
-        print(store)
+        logger.info(f'Store: {store}')
         if store == 'cds':
             if type == "analysis":
                 download_file = download_data_cds_an(
@@ -352,15 +371,22 @@ def main():
                 cdo.daymean(input=infile, output=outfile)
             elif type == "forecast":
                 tmpfile=infile.replace("3hr", "tmp")
+                tmpfile2=infile.replace("3hr", "tmp2")
+                # shift time by -1 hour to get the correct day aggregation
                 cdo.shifttime("-1hour", input=infile, output=tmpfile)
+                # cut the first time step, containing data from previous day
+                #ncks -O -d time,1, tmpfile tmpfile2
+                cdo.seltimestep("2/-1", input=tmpfile, output=tmpfile2)
                 if agg_method == "max":
-                    cdo.daymax(input=tmpfile, output=outfile)
+                    cdo.daymax(input=tmpfile2, output=outfile)
                 elif agg_method == "min":
-                    cdo.daymin(input=tmpfile, output=outfile)
+                    cdo.daymin(input=tmpfile2, output=outfile)
                 elif agg_method == "sum":
-                    cdo.daysum(input=tmpfile, output=outfile)
+                    cdo.daysum(input=tmpfile2, output=outfile)
+                elif agg_method == "mean":
+                    cdo.daymean(input=tmpfile2, output=outfile)
                 else:
-                    logger.error(f"Variables with type forecast should be aggregated as sum, max or min not {agg_method}.")
+                    logger.error(f"Variables with type forecast should be aggregated as sum, max, min or mean not {agg_method}.")
             else:
                 logger.error(f"Type analysis {type} with aggregation method {agg_method} is not implemented.")
 
@@ -413,7 +439,7 @@ def main():
         # -------------------------------------------------
         # Clean up
         # -------------------------------------------------
-        os.system(f"rm {work_path}/{var}_*")
+        #os.system(f"rm {work_path}/{var}_*")
 
 if __name__ == "__main__":
     main()
