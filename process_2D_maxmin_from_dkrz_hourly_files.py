@@ -1,4 +1,13 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+File Name : process_2D_maxmin_from_dkrz_hourly_files.py
+Author: Ruth Lorenz (ruth.lorenz@c2sm.ethz.ch)
+Created: 08/12/2023
+Purpose: process ERA5 data downloaded from dkrz hourly files to daily max/min and
+         convert to variable names and units as in cmip
+        env: cdsapi_10_2024
+"""
 
 # -------------------------------------------------
 # Getting libraries and utilities
@@ -6,22 +15,44 @@
 import calendar
 import json
 import logging
+import time
+import argparse
 import os
+import subprocess
 from datetime import datetime
 
 import xarray as xr
 
 from functions.file_util import read_config, read_era5_info
+from functions.read_config import read_yaml_config
+from functions.general_functions import *
 
 # -------------------------------------------------
 # Create a simple logger
 # -------------------------------------------------
 
-logging.basicConfig(
-    format="%(asctime)s | %(levelname)s : %(message)s", level=logging.INFO
+# Define logfile and logger
+seconds = time.time()
+local_time = time.localtime(seconds)
+# Name the logfile after first of all inputs
+LOG_FILENAME = (
+    f"logfiles/logging_maxmin_ERA5_dkrz"
+    f"_{local_time.tm_year}{local_time.tm_mon}"
+    f"{local_time.tm_mday}{local_time.tm_hour}{local_time.tm_min}"
+    f".out"
 )
-logger = logging.getLogger()
 
+logging.basicConfig(
+    filename=LOG_FILENAME,
+    filemode="w",
+    format="%(levelname)s %(asctime)s: %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
+
+# -------------------------------------------------
+# Define functions
+# -------------------------------------------------
 
 def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, year, month, day_str):
     """
@@ -32,18 +63,55 @@ def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, year, month, day
     """
 
     tmpfile = f'{workdir}/tmp_var{era5_info["param"]}_era5'
-    tmp_outfile = f'{workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}.nc'
-    os.system(f"cdo -t ecmwf -setgridtype,regular {grib_file} {tmpfile}.grib")
-    os.system(f"grib_to_netcdf -o  {tmp_outfile} {tmpfile}.grib")
+    tmp_outfile = f'{workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}'
+
+
+    try:
+        cmd = [
+            "cdo",
+            "-t",
+            "ecmwf",
+            "-setgridtype,regular",
+            f"{grib_file}",
+            f"{tmpfile}.grib"
+        ]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+        print(f"Standard error:\n{e.stderr}")
+
+
+    try:
+        cmd = [
+            "grib_to_netcdf",
+            "-o",
+            f"{tmp_outfile}.nc",
+            f"{tmpfile}.grib"
+        ]
+        result_g_n = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+        print(f"Standard error:\n{e.stderr}")
 
     return tmp_outfile
 
 
 def calc_minmax(infile, minmax_file, dayagg, year, month, day_str):
+    try:
+        cmd = [
+            "cdo",
+            f"{dayagg}",
+            f"{infile}.nc",
+            f"{minmax_file}{day_str}.nc"
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+        print(f"Standard error:\n{e.stderr}")
 
-    os.system(
-        f'cdo {dayagg} {infile} {minmax_file}{day_str}.nc'
-    )
     if not os.path.isfile(
         f"{minmax_file}{day_str}.nc"
     ):
@@ -52,58 +120,173 @@ def calc_minmax(infile, minmax_file, dayagg, year, month, day_str):
         )
     else:
         # clean up 1-hr data
-        os.system(f"rm {infile}")
+        os.system(f"rm {infile}.nc")
 
     return
 
 def convert_era5_to_cmip(
-    tmp_outfile, varout, outfile, config, era5_info, year, month
+    tmp_outfile, varout, outfile, work_path, era5_info, year, month, lat_chk, lon_chk
 ):
-    tmpfile = f'{config.work_path}/{era5_info["short_name"]}_era5_{year}{month}'
+    tmpfile = f'{work_path}/{era5_info["short_name"]}_era5_{year}{month}'
 
-    os.system(
-        f"cdo remapcon,/net/atmos/data/era5_cds/gridfile_cds_025.txt {tmp_outfile} {tmpfile}_remapped.nc"
-    )
-    os.system(
-        f"ncks -O -4 -D 4 --cnk_plc=g3d --cnk_dmn=time,1 --cnk_dmn=lat,{config.lat_chk} --cnk_dmn=lon,{config.lon_chk} {tmpfile}_remapped.nc {tmpfile}_chunked.nc"
-    )
-    os.system(
-        f'ncrename -O -v {era5_info["short_name"]},{varout} {tmpfile}_chunked.nc {outfile}'
-    )
+
+    try:
+        cmd = ["cdo",
+        "remapcon,/net/atmos/data/era5_cds/gridfile_cds_025.txt",
+        f"{tmp_outfile}",
+        f"{tmpfile}_remapped.nc"
+        ]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+
+
+    try:
+        cmd = ["ncks",
+        "-O",
+        "-4",
+        "-D",
+        "4",
+        "--cnk_plc=g3d",
+        "--cnk_dmn=time,1",
+        f"--cnk_dmn=lat,{lat_chk}",
+        f"--cnk_dmn=lon,{lon_chk}",
+        f"{tmpfile}_remapped.nc",
+        f"{tmpfile}_chunked.nc"
+        ]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+
+
+    try:
+        cmd = [
+            "ncrename",
+            "-O",
+            "-v",
+            f'{era5_info["short_name"]},{varout}',
+            f"{tmpfile}_chunked.nc",
+            f"{outfile}"
+        ]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+
+        if era5_info["short_name"]=='2t':
+            print(f"Try with using t2m instead 2t.")
+            try:
+                cmd = [
+                    "ncrename",
+                    "-O",
+                    "-v",
+                    f't2m,{varout}',
+                    f"{tmpfile}_chunked.nc",
+                    f"{outfile}"
+                ]
+                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Command failed with return code {e.returncode}")
+                print(f"Standard output:\n{e.stdout}")
 
     return outfile
 
 
-def calc_mon_mean(path_proc, infile, varout, year, month):
-    proc_mon_archive = (
-        f'{path_proc}/{varout}/mon/native/{year}'
+def calc_mon_mean(path_work, infile, varout, year, month):
+    proc_mon_work = (
+        f'{path_work}/{varout}/mon/native/{year}'
     )
-    os.makedirs(proc_mon_archive, exist_ok=True)
+    os.makedirs(proc_mon_work, exist_ok=True)
     outfile_mon = (
-        f'{proc_mon_archive}/{varout}_mon_era5_{year}{month}.nc'
+        f'{proc_mon_work}/{varout}_mon_era5_{year}{month}.nc'
     )
-    os.system(f"cdo monmean {outfile_name} {outfile_mon}")
+
+    try:
+        cmd = [
+            "cdo",
+            "monmean",
+            f"{infile}",
+            f"{outfile_mon}"
+        ]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+
+    return outfile_mon
 
 # -------------------------------------------------
 
 
 def main():
     # -------------------------------------------------
+    # Parse command line input
+    # -------------------------------------------------
+    parser = argparse.ArgumentParser(
+        description="Download ERA5 data and process to CMIP like"
+    )
+    parser.add_argument(
+        "-c",
+        "--configname",
+        help="Name of the config yaml file",
+        required=True,
+    )
+    args = parser.parse_args()
+
+    configname = args.configname
+
+    # -------------------------------------------------
     # Read config
     # -------------------------------------------------
-    # read config file
-    cfg = read_config("configs", "era5_dkrz_config_maxmin.ini")
-    logger.info(f"Read configuration is: {cfg}")
+
+    config = read_yaml_config(configname)
+    logger.info(f"Read configuration as {config}")
+
+    store = config['dataset']['store']
+    dataname = config['dataset']['name'].lower()
+
+    # variable to be processed
+    var = config['variables']['varname']
+    freq = config['variables']['freq']
+    family = config['variables']['family']
+    level = config['variables']['level']
+    varout_list = [config['variables']['varout1'], config['variables']['varout2']]
+    print(f"Variable to be processed: {var}, output variables: {varout_list}")
+
+    # configured paths
+    origin = config['paths']['origin']
+    download_path = config['paths']['download']
+    work_all_path = config['paths']['work']
+    proc_path = config['paths']['proc']
+    work_path = f"{work_all_path}/{var}/"
+    grib_path = f"{download_path}/{var}/"
+
+    # time span to download and process
+    startyr = config['time']['startyr']
+    endyr = config['time']['endyr']
+
+    # months is optional, can be one month or list of months
+    try:
+        c_months = config['time']['months']
+        months = convert_month_list(c_months)
+
+        all_months = False
+    except KeyError:
+        months = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
+        all_months = True
+
+    # overwrite files, download from CDS if already exists and reprocess
+    overwrite = config['flags']['overwrite']
 
     # -------------------------------------------------
     # Create directories if do not exist yet
     # -------------------------------------------------
-    os.makedirs(cfg.work_path, exist_ok=True)
-    os.makedirs(cfg.path_proc, exist_ok=True)
+    os.makedirs(work_path, exist_ok=True)
+    os.makedirs(proc_path, exist_ok=True)
 
-    for v, varout in enumerate(cfg.varout):
-        var = cfg.variables
-        grib_path = f"{cfg.path}/{var}"
+    for v, varout in enumerate(varout_list):
         logger.info(f'Processing variable {varout} from {var}:')
 
         # -------------------------------------------------
@@ -123,45 +306,29 @@ def main():
         elif "min" in varout:
             dayagg = "daymin"
 
-        for year in range(cfg.startyr, cfg.endyr + 1):
+        for year in range(startyr, endyr + 1):
             logger.info(f"Processing year {year}.")
 
-            t0 = datetime.now()
+            print(store)
+            if store == 'dkrz':
+                download_file = download_data_dkrz(
+                    freq=freq, era5_info=era5_info, origin=origin, iac_path=grib_path, year=year, months=months, all_months=all_months, family=family, level=level)
+                download_success = f"Data download successful!"
+            else:
+                download_success = f"Warning, download from store {store} not implemented."
+            logger.info(download_success)
+            print(download_file)
 
-            logger.info(f"Copying variable {var}")
-            vparam = era5_info["param"]
 
-            dkrz_path = f"/pool/data/ERA5/E5/sf/an/{cfg.freq}/{vparam}"
-
-            iac_path = f"{grib_path}"
-
-            os.makedirs(iac_path, exist_ok=True)
-
-            logger.info(f"rsync data from  {dkrz_path} to {iac_path}")
-            os.system(
-                f"rsync -av levante:{dkrz_path}/E5sf00_{cfg.freq}_{year}-??-??_{vparam}.* {iac_path}"
-            )
-
-            dt = datetime.now() - t0
-            logger.info(f"Success! All data copied in {dt}")
-
-            proc_archive = f'{cfg.path_proc}/{varout}/day/native/{year}'
+            proc_archive = f'{proc_path}/{varout}/day/native/{year}'
             os.makedirs(proc_archive, exist_ok=True)
 
-            for month in [
-                "01",
-                "02",
-                "03",
-                "04",
-                "05",
-                "06",
-                "07",
-                "08",
-                "09",
-                "10",
-                "11",
-                "12",
-            ]:
+            proc_mon_archive = proc_archive.replace("day", "mon")
+            os.makedirs(proc_mon_archive, exist_ok=True)
+
+            for month in months:
+                logger.info(f"Processing month {month}.")
+
                 outfile = (
                     f'{proc_archive}/{varout}_day_era5_{year}{month}.nc'
                 )
@@ -169,48 +336,52 @@ def main():
                 num_days = calendar.monthrange(year, int(month))[1]
                 days = [*range(1, num_days + 1)]
 
-                minmax_file = f'{cfg.work_path}/{var}_{dayagg}_era5_{year}{month}'
+                minmax_file = f'{work_path}/{var}_{dayagg}_era5_{year}{month}'
 
                 for day in days:
                     day_str = f"{day:02d}"
 
-                    grib_file = f'{grib_path}/E5sf00_{cfg.freq}_{year}-{month}-{day_str}_{era5_info["param"]}.grb'
+                    grib_file = f'{grib_path}/E5sf00_{freq}_{year}-{month}-{day_str}_{era5_info["param"]}.grb'
 
                     tmp_outfile = convert_netcdf_add_era5_info(
-                        grib_file, cfg.work_path, era5_info, year, month, day_str
+                        grib_file, work_path, era5_info, year, month, day_str
                     )
 
                     calc_minmax(tmp_outfile, minmax_file, dayagg, year, month, day_str)
 
                 # concatenate daily files
-                daily_file = f"{cfg.work_path}/{varout}_day_era5_{year}{month}.nc"
-                os.system(
-                    f"cdo -b F64 mergetime {minmax_file}*.nc {daily_file}"
-                )
+                daily_file = f"{work_path}/{varout}_day_era5_{year}{month}.nc"
+                try:
+                    cmd = [
+                        "cdo",
+                        "-b",
+                        "F64",
+                        "mergetime",
+                        f"{minmax_file}*.nc",
+                        f"{daily_file}"
+                    ]
+                    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                except subprocess.CalledProcessError as e:
+                    print(f"Command failed with return code {e.returncode}")
+                    print(f"Standard output:\n{e.stdout}")
+
 
                 outfile_name = convert_era5_to_cmip(
-                    daily_file, varout, outfile, cfg, era5_info, year, month
+                    daily_file, varout, outfile, work_path, era5_info,
+                    year, month, config["chunking"]["lat_chk"], config["chunking"]["lon_chk"]
                 )
 
                 logger.info(f"File {outfile_name} written.")
 
-            # calculate monthly mean
-            proc_mon_archive = (
-                f'{cfg.path_proc}/{varout}/mon/native/{year}'
-            )
-            os.makedirs(proc_mon_archive, exist_ok=True)
-            outfile_mon = (
-                f'{proc_mon_archive}/{varout}_mon_era5_{year}{month}.nc'
-            )
-            os.system(f"cdo monmean {outfile_name} {outfile_mon}")
-
-            logger.info(f"File {outfile_mon} written.")
+                # calculate monthly mean
+                outfile_mon = calc_mon_mean(proc_path, outfile_name, varout, year, month)
+                logger.info(f"File {outfile_mon} written.")
 
         # -------------------------------------------------
         # Clean up
         # -------------------------------------------------
-        os.system(f"rm {cfg.work_path}/{varout}_*")
-    os.system(f"rm {cfg.work_path}/{var}_*")
+        os.system(f"rm {work_path}/{varout}_*")
+    os.system(f"rm {work_path}/{var}_*")
     os.system(f"rm {grib_path}/*")
 
 
