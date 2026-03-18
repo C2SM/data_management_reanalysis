@@ -24,6 +24,7 @@ import xarray as xr
 from cdo import Cdo
 import numpy as np
 import re
+import glob
 
 from functions.read_config import read_yaml_config
 from functions.general_functions import *
@@ -77,16 +78,17 @@ def download_data_cds_an(dataname, cerra_info, origin, workdir, year, months, ov
 
     target_allg = f'{workdir}/{cerra_info["short_name"]}_3hr_{data_name}_{year}MM.nc'
 
+    dataset = origin
+
     for month in months:
 
         target_str = target_allg.replace("MM", month)
         grib_file = target_str.replace(".nc", ".grib")
-        target=Path(target_str)
+        target=Path(grib_file)
+        target_nc = Path(target_str)
         logger.info(f'NetCDFfile to download is {target_str}')
 
-        dataset = origin
-
-        if not target.is_file() or overwrite:
+        if overwrite or (not target.exists() and not target_nc.exists()):
             request = {
                 "variable": [long_name],
                 "level_type": [level_type],
@@ -117,19 +119,23 @@ def download_data_cds_an(dataname, cerra_info, origin, workdir, year, months, ov
 
             client = cdsapi.Client()
             client.retrieve(dataset, request, grib_file)
+        else:
+            logger.info(f"File {target_str} already exists, skipping download.")
+            print(f"File {target_str} already exists, skipping download.")
 
-            #cdo.copy(options =  "-f nc", input=grib_file, output=target)
-            py_grib_to_netcdf(grib_file, target)
+        if not target_nc.is_file() or overwrite:
+            cdo.copy(options =  "-f nc4 sorttaxis", input=grib_file, output=target_str)
 
-            try:
-                cmd = [
-                    'rm',
-                    f'{grib_file}'
-                ]
-                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            except subprocess.CalledProcessError as e:
-                print(f"Command failed with return code {e.returncode}")
-                print(f"Standard output:\n{e.stdout}")
+
+        #try:
+        #    cmd = [
+        #        'rm',
+        #        f'{grib_file}'
+        #    ]
+        #    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        #except subprocess.CalledProcessError as e:
+        #    print(f"Command failed with return code {e.returncode}")
+        #    print(f"Standard output:\n{e.stdout}")
 
     return target_allg
 
@@ -156,15 +162,17 @@ def download_data_cds_fc(dataname, cerra_info, origin, workdir, year, months, ov
 
     target_allg = f'{workdir}/{cerra_info["short_name"]}_3hr_{data_name}_{year}MM.nc'
 
+    dataset = origin
+
     for month in months:
 
-        target = target_allg.replace("MM", month)
-        grib_file = target.replace(".nc", ".grib")
-        logger.info(f'NetCDFfile to download is {target}')
+        target_str = target_allg.replace("MM", month)
+        grib_file = target_str.replace(".nc", ".grib")
+        target = Path(grib_file)
+        target_nc = Path(target_str)
+        logger.info(f'NetCDFfile to download is {target_str}')
 
-        dataset = origin
-
-        if not os.path.isfile(f'{target}') or overwrite:
+        if overwrite or (not target.exists() and not target_nc.exists()):
             request = {
                 "variable": [long_name],
                 "level_type": [level_type],
@@ -196,30 +204,40 @@ def download_data_cds_fc(dataname, cerra_info, origin, workdir, year, months, ov
 
             client = cdsapi.Client()
             client.retrieve(dataset, request, grib_file)
+        else:
+            logger.info(f"File {target_str} already exists, skipping download.")
 
-            #cdo.copy("-f nc", input=grib_file, output=target)
-            py_grib_to_netcdf(grib_file, target)
+        if not target_nc.is_file() or overwrite:
+            cdo.copy(options =  "-f nc4 sorttaxis", input=grib_file, output=target_str)
 
-            try:
-                cmd = [
-                    'rm',
-                    f'{grib_file}'
-                ]
-                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            except subprocess.CalledProcessError as e:
-                print(f"Command failed with return code {e.returncode}")
-                print(f"Standard output:\n{e.stdout}")
+        #try:
+        #    cmd = [
+        #        'rm',
+        #        f'{grib_file}'
+        #    ]
+        #    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        #except subprocess.CalledProcessError as e:
+        #    print(f"Command failed with return code {e.returncode}")
+        #    print(f"Standard output:\n{e.stdout}")
 
     return target_allg
 
 
 def convert_cerra_to_cmip(tmp_outfile, proc_archive, cerra_info, dataname, year, time_chk, lon_chk, lat_chk):
     #tmpfile = f'{work_path}/{era5_info["short_name"]}_era5_{year}{month}'
+    if "tasmax" in tmp_outfile:
+        newname = cerra_info["cmip_name"].replace("tas", "tasmax")
+        agg_method = "max"
+    elif "tasmin" in tmp_outfile:
+        newname = cerra_info["cmip_name"].replace("tas", "tasmin")
+        agg_method = "min"
+    else:
+        newname = cerra_info["cmip_name"]
+        agg_method = cerra_info["agg_method"]
     oldname = cerra_info["short_name"]
-    newname = cerra_info["cmip_name"]
     path_to_tmp = Path(tmp_outfile)
     tmpfile = f'{str(path_to_tmp.parent)}/{path_to_tmp.stem}'
-    outfile = f'{proc_archive}/{newname}_day_{cerra_info["agg_method"]}_{dataname.lower()}_{year}.nc'
+    outfile = f'{proc_archive}/{newname}_day_{agg_method}_{dataname.lower()}_{year}.nc'
 
     #os.system(
     #    f"ncks -O -4 -D 4 --cnk_plc=g3d --cnk_dmn=time,{time_chk} --cnk_dmn=lat,{lat_chk} --cnk_dmn=lon,{lon_chk} -L 1 {tmp_outfile} {tmpfile}_chunked.nc"
@@ -241,6 +259,31 @@ def convert_cerra_to_cmip(tmp_outfile, proc_archive, cerra_info, dataname, year,
         print(f"Command failed with return code {e.returncode}")
         print(f"Standard output:\n{e.stdout}")
 
+    if oldname == "2t":
+        # for 2m temperature squeeze height dimension
+        try:
+            cmd = [
+                "ncwa",
+                "-O","-a","height",
+                f"{tmpfile}_chunked.nc",
+                f"{tmpfile}_squeezed.nc"
+            ]
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Command failed with return code {e.returncode}")
+            print(f"Standard output:\n{e.stdout}")
+    else:
+        try:
+            cmd = [
+                "mv",
+                f"{tmpfile}_chunked.nc",
+                f"{tmpfile}_squeezed.nc"
+            ]
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Command failed with return code {e.returncode}")
+            print(f"Standard output:\n{e.stdout}")
+
     #os.system(
     #    f'ncrename -O -v {cerra_info["short_name"]},{cerra_info["cmip_name"]} {tmpfile}_chunked.nc {outfile}'
     #)
@@ -249,7 +292,7 @@ def convert_cerra_to_cmip(tmp_outfile, proc_archive, cerra_info, dataname, year,
             "ncrename",
             "-O","-v",
             f"{oldname},{newname}",
-            f"{tmpfile}_chunked.nc",
+            f"{tmpfile}_squeezed.nc",
             f"{outfile}"
         ]
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
@@ -257,7 +300,98 @@ def convert_cerra_to_cmip(tmp_outfile, proc_archive, cerra_info, dataname, year,
         print(f"Command failed with return code {e.returncode}")
         print(f"Standard output:\n{e.stdout}")
 
+        if oldname == '2t':
+            print(f"Try with using t2m instead 2t.")
+            try:
+                cmd = [
+                    "ncrename",
+                    "-O",
+                    "-v",
+                    f't2m,{newname}',
+                    f"{tmpfile}_squeezed.nc",
+                    f"{outfile}"
+                ]
+                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Command failed with return code {e.returncode}")
+                print(f"Standard output:\n{e.stdout}")
+
     return outfile
+
+
+def process_daily_stats(work_path, var, proc_archive, cerra_info, months,
+                        download_file, dataname, year, config, outfile_mon):
+    """
+    Processes sub-daily data to daily max/min with error handling and validation.
+    """
+    stats = ['tasmax', 'tasmin']
+    results = {}
+
+    for stat in stats:
+        try:
+            # Path Setup & Directory Creation
+            stat_workpath = work_path.replace(var, stat)
+            stat_outpath = proc_archive.replace(cerra_info["cmip_name"], stat)
+
+            for path in [stat_workpath, stat_outpath]:
+                os.makedirs(path, exist_ok=True)
+
+            # Daily Processing with Input Validation
+            for month in months:
+                infile = download_file.replace("MM", month)
+
+                if not os.path.exists(infile):
+                    logger.error(f"Input file missing: {infile}")
+                    continue
+
+                outfile_daily = infile.replace("3hr", "day").replace("2t", stat)
+
+                try:
+                    if stat == 'tasmax':
+                        cdo.daymax(input=infile, output=outfile_daily)
+                    else:
+                        cdo.daymin(input=infile, output=outfile_daily)
+                except Exception as e:
+                    logger.error(f"CDO daily operation failed for {stat} in month {month}: {e}")
+                    raise
+
+            # Merging Monthly Files
+            daily_files_wildcard = download_file.replace("3hr", "day").replace("2t", stat).replace("MM", "??")
+            outfile_yearly_temp = daily_files_wildcard.replace("??", "")
+
+            # Check if any daily files were actually created before merging
+            if not glob.glob(daily_files_wildcard):
+                raise FileNotFoundError(f"No daily files found to merge for {stat} using pattern {daily_files_wildcard}")
+
+            cdo.mergetime(input=daily_files_wildcard, output=outfile_yearly_temp)
+
+            # Conversion to CMIP
+            # We wrap this in a sub-try because it's often a custom complex function
+            try:
+                final_yearly_file = convert_cerra_to_cmip(
+                    outfile_yearly_temp, stat_outpath, cerra_info,
+                    dataname, year, config['chunking']['time_chk'],
+                    config['chunking']['lon_chk'], config['chunking']['lat_chk']
+                )
+            except KeyError as e:
+                logger.error(f"Config error: Missing chunking key {e}")
+                raise
+            except Exception as e:
+                logger.error(f"CMIP conversion failed for {stat}: {e}")
+                raise
+
+            # Monthly Mean Calculation
+            stat_outfile_mon = outfile_mon.replace("2t", stat)
+            cdo.monmean(input=final_yearly_file, output=stat_outfile_mon)
+
+            logger.info(f"Successfully processed: {stat_outfile_mon}")
+            results[stat] = stat_outfile_mon
+
+        except Exception as e:
+            logger.critical(f"Pipeline failed for statistic '{stat}': {e}")
+            continue
+
+    return results
 
 
 def main():
@@ -371,24 +505,18 @@ def main():
                 cdo.daymean(input=infile, output=outfile)
             elif type == "forecast":
                 tmpfile=infile.replace("3hr", "tmp")
-                tmpfile2=infile.replace("3hr", "tmp2")
                 # shift time by -1 hour to get the correct day aggregation
                 cdo.shifttime("-1hour", input=infile, output=tmpfile)
-                # cut the first time step, containing data from previous day
-                #ncks -O -d time,1, tmpfile tmpfile2
-                cdo.seltimestep("2/-1", input=tmpfile, output=tmpfile2)
                 if agg_method == "max":
-                    cdo.daymax(input=tmpfile2, output=outfile)
+                    cdo.daymax(input=tmpfile, output=outfile)
                 elif agg_method == "min":
-                    cdo.daymin(input=tmpfile2, output=outfile)
+                    cdo.daymin(input=tmpfile, output=outfile)
                 elif agg_method == "sum":
-                    cdo.daysum(input=tmpfile2, output=outfile)
+                    cdo.daysum(input=tmpfile, output=outfile)
                 elif agg_method == "mean":
-                    cdo.daymean(input=tmpfile2, output=outfile)
+                    cdo.daymean(input=tmpfile, output=outfile)
                 else:
-                    logger.error(f"Variables with type forecast should be aggregated as sum, max, min or mean not {agg_method}.")
-            else:
-                logger.error(f"Type analysis {type} with aggregation method {agg_method} is not implemented.")
+                    logger.error(f"Type analysis {type} with aggregation method {agg_method} is not implemented.")
 
             # check if unit needs to be changed from era5/cerra variable to cmip variable
             if cerra_info["unit"] != cerra_info["cmip_unit"]:
@@ -414,8 +542,8 @@ def main():
                     )
                     sys.exit(1)
 
-        daily_files = download_file.replace("3hr", "day").replace("MM", "*")
-        outfile_yearly = daily_files.replace("*", "")
+        daily_files = download_file.replace("3hr", "day").replace("MM", "??")
+        outfile_yearly = daily_files.replace("??", "")
         print(outfile_yearly)
         cdo.mergetime(input=daily_files, output=outfile_yearly)
 
@@ -435,6 +563,15 @@ def main():
             f'{proc_mon_archive}/{cerra_info["cmip_name"]}_mon_{dataname.lower()}_{year}.nc'
         )
         cdo.monmean(input=outfile_name, output=outfile_mon)
+
+
+        # for 2m temperaturea also create tasmax and tasmin files
+        if var == "2t":
+            daily_stats = process_daily_stats(work_path, var, proc_archive, cerra_info, months,
+                            download_file, dataname, year, config, outfile_mon)
+
+            logger.info(f"Daily Max processed: {daily_stats['tasmax']}")
+            logger.info(f"Daily Min processed: {daily_stats['tasmin']}")
 
         # -------------------------------------------------
         # Clean up
