@@ -148,6 +148,41 @@ def download_data_cds(dataname, era5_info, origin, workdir, year, months, overwr
     return target_allg
 
 
+def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, year, month, day_str):
+    """
+    Convert grib file to netcdf
+
+    use grib_to_netcdf, adds meaningful variable name and time dimension
+    incl. standard_name and long_name
+    """
+
+    tmpfile = f'{workdir}/tmp_var{era5_info["param"]}_era5'
+    tmp_outfile = f'{workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}.nc'
+
+    try:
+        cmd = f"cdo -t ecmwf -setgridtype,regular {grib_file} {tmpfile}.grib"
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True, shell=True)
+        print(f"CDO command output:\n{result.stdout}")
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+        print(f"Standard error:\n{e.stderr}")
+        sys.exit(1)
+
+    try:
+        cmd = f"grib_to_netcdf -o  {tmp_outfile} {tmpfile}.grib"
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True, shell=True)
+        print(f"GRIB to NetCDF command output:\n{result.stdout}")
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+        print(f"Standard error:\n{e.stderr}")
+        sys.exit(1)
+
+
+    return tmp_outfile
+
+
 def py_grib_to_netcdf(
     input_grib: str,
     output_nc: str,
@@ -310,6 +345,20 @@ def convert_tp(tp_outfile, workdir, data_info, dataname, year, month):
         except subprocess.CalledProcessError as e:
             logger.error(f"Command failed with return code {e.returncode}")
             logger.error(f"Standard output:\n{e.stdout}")
+
+        # set long_name attribute to precipitation_flux
+        try:
+            cmd = [
+                "ncatted",
+                "-O",
+                "-a",
+                f"long_name,{data_info['short_name']},o,c,precipitation_flux",
+                f"{tp_outfile}"]
+            results = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Command failed with return code {e.returncode}")
+            logger.error(f"Standard output:\n{e.stdout}")
+
 
         # check if tp_outfile was created successfully
         if not os.path.isfile(f"{tp_outfile}"):
