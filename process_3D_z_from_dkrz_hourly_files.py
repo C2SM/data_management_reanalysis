@@ -119,7 +119,7 @@ def convert_z(tmp_outfile, workdir, era5_info, year, month, day_str):
     return tmp_outfile
 
 
-def convert_era5_to_cmip(
+def convert_era5_to_cmip_plev(
     tmp_outfile, outfile, config, era5_info, year, month
 ):
     tmpfile = f'{config.work_path}/{era5_info["short_name"]}_era5_{year}{month}'
@@ -346,7 +346,7 @@ def main():
                 f"cdo mergetime {work_path}/{var}_daymean_era5_{year}{month}*.nc {daily_file}"
             )
 
-            outfile_name = convert_era5_to_cmip(
+            outfile_name = convert_era5_to_cmip_plev(
                 daily_file, outfile, cfg, era5_info, year, month
             )
 
