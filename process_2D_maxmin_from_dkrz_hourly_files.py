@@ -54,50 +54,6 @@ logger = logging.getLogger(__name__)
 # Define functions
 # -------------------------------------------------
 
-def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, year, month, day_str):
-    """
-    Convert grib file to netcdf
-
-    use grib_to_netcdf, adds meaningful variable name and time dimension
-    incl. standard_name and long_name
-    """
-
-    tmpfile = f'{workdir}/tmp_var{era5_info["param"]}_era5'
-    tmp_outfile = f'{workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}'
-
-
-    try:
-        cmd = [
-            "cdo",
-            "-t",
-            "ecmwf",
-            "-setgridtype,regular",
-            f"{grib_file}",
-            f"{tmpfile}.grib"
-        ]
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Standard output:\n{e.stdout}")
-        print(f"Standard error:\n{e.stderr}")
-
-
-    try:
-        cmd = [
-            "grib_to_netcdf",
-            "-o",
-            f"{tmp_outfile}.nc",
-            f"{tmpfile}.grib"
-        ]
-        result_g_n = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Standard output:\n{e.stdout}")
-        print(f"Standard error:\n{e.stderr}")
-
-    return tmp_outfile
-
-
 def calc_minmax(infile, minmax_file, dayagg, year, month, day_str):
     try:
         cmd = [
@@ -123,75 +79,6 @@ def calc_minmax(infile, minmax_file, dayagg, year, month, day_str):
         os.system(f"rm {infile}.nc")
 
     return
-
-def convert_era5_to_cmip(
-    tmp_outfile, varout, outfile, work_path, era5_info, year, month, lat_chk, lon_chk
-):
-    tmpfile = f'{work_path}/{era5_info["short_name"]}_era5_{year}{month}'
-
-
-    try:
-        cmd = ["cdo",
-        "remapcon,/net/atmos/data/era5_cds/gridfile_cds_025.txt",
-        f"{tmp_outfile}",
-        f"{tmpfile}_remapped.nc"
-        ]
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Standard output:\n{e.stdout}")
-
-
-    try:
-        cmd = ["ncks",
-        "-O",
-        "-4",
-        "-D",
-        "4",
-        "--cnk_plc=g3d",
-        "--cnk_dmn=time,1",
-        f"--cnk_dmn=lat,{lat_chk}",
-        f"--cnk_dmn=lon,{lon_chk}",
-        f"{tmpfile}_remapped.nc",
-        f"{tmpfile}_chunked.nc"
-        ]
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Standard output:\n{e.stdout}")
-
-
-    try:
-        cmd = [
-            "ncrename",
-            "-O",
-            "-v",
-            f'{era5_info["short_name"]},{varout}',
-            f"{tmpfile}_chunked.nc",
-            f"{outfile}"
-        ]
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Standard output:\n{e.stdout}")
-
-        if era5_info["short_name"]=='2t':
-            print(f"Try with using t2m instead 2t.")
-            try:
-                cmd = [
-                    "ncrename",
-                    "-O",
-                    "-v",
-                    f't2m,{varout}',
-                    f"{tmpfile}_chunked.nc",
-                    f"{outfile}"
-                ]
-                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            except subprocess.CalledProcessError as e:
-                print(f"Command failed with return code {e.returncode}")
-                print(f"Standard output:\n{e.stdout}")
-
-    return outfile
 
 
 def calc_mon_mean(path_work, infile, varout, year, month):
@@ -344,7 +231,7 @@ def main():
                     grib_file = f'{grib_path}/E5sf00_{freq}_{year}-{month}-{day_str}_{era5_info["param"]}.grb'
 
                     tmp_outfile = convert_netcdf_add_era5_info(
-                        grib_file, work_path, era5_info, year, month, day_str
+                        grib_file, work_path, era5_info, dataname, year, month, day_str
                     )
 
                     calc_minmax(tmp_outfile, minmax_file, dayagg, year, month, day_str)
@@ -367,7 +254,7 @@ def main():
 
 
                 outfile_name = convert_era5_to_cmip(
-                    daily_file, varout, outfile, work_path, era5_info,
+                    daily_file, varout, outfile, work_path, era5_info, dataname,
                     year, month, config["chunking"]["lat_chk"], config["chunking"]["lon_chk"]
                 )
 
