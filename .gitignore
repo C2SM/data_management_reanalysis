@@ -5,3 +5,4 @@ functions/__pycache__/*
 
 *.nc
 *.grib
+*.ipynb
