@@ -73,7 +73,7 @@ def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, year, month, day
     return tmp_outfile
 
 
-def compute_wind_from_u_v(u_comp, v_comp):    
+def compute_wind_from_u_v(u_comp, v_comp):
     '''
     Calculates Wind Speed from U and V components
 
@@ -82,13 +82,13 @@ def compute_wind_from_u_v(u_comp, v_comp):
     v_comp: V Wind component
 
     Returns:
-    Wind speed in m s-1 
+    Wind speed in m s-1
     '''
 
     u_square = np.square(u_comp)
     v_square = np.square(v_comp)
     uv_sum = np.add(u_square, v_square)
-                
+
     sfcW = np.sqrt(uv_sum)
 
     return sfcW
