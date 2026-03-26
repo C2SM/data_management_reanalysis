@@ -147,38 +147,79 @@ def download_data_cds(dataname, era5_info, origin, workdir, year, months, overwr
 
     return target_allg
 
-
-def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, year, month, day_str):
+def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, dataname, year, month, day=None):
     """
     Convert grib file to netcdf
 
     use grib_to_netcdf, adds meaningful variable name and time dimension
     incl. standard_name and long_name
     """
+    # define input and output filenames
+    if not day:
+        tmpfile = f'{workdir}/tmp_var{era5_info["param"]}_{dataname}_{year}{month}'
+        tmp_outfile = f'{workdir}/tmp2_{era5_info["short_name"]}_{dataname}_{year}{month}.nc'
+    else:
+        tmpfile = f'{workdir}/tmp_var{era5_info["param"]}_{dataname}_{year}{month}{day}'
+        tmp_outfile = f'{workdir}/tmp2_{era5_info["short_name"]}_{dataname}_{year}{month}{day}.nc'
 
-    tmpfile = f'{workdir}/tmp_var{era5_info["param"]}_era5'
-    tmp_outfile = f'{workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}.nc'
-
+    # Set grid type to ecmwf regular, otherwise grib_to_netcdf will fail
     try:
         cmd = f"cdo -t ecmwf -setgridtype,regular {grib_file} {tmpfile}.grib"
         result = subprocess.run(cmd, check=True, capture_output=True, text=True, shell=True)
         print(f"CDO command output:\n{result.stdout}")
     except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Standard output:\n{e.stdout}")
-        print(f"Standard error:\n{e.stderr}")
+        logger.error(f"Command failed with return code {e.returncode}")
+        logger.error(f"Standard error:\n{e.stderr}")
+        logger.error(f"Standard output:\n{e.stdout}")
+
+    # check if grib file was created successfully
+    if not os.path.isfile(f"{tmpfile}.grib"):
+        logger.error(f"Grib file {tmpfile}.grib was not created successfully.")
         sys.exit(1)
 
     try:
-        cmd = f"grib_to_netcdf -o  {tmp_outfile} {tmpfile}.grib"
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True, shell=True)
-        print(f"GRIB to NetCDF command output:\n{result.stdout}")
+        cmd = [
+            "grib_to_netcdf",
+            "-o",
+            f"{tmpfile}.nc",
+            f"{tmpfile}.grib"
+        ]
+        result_g_n = subprocess.run(cmd, capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Standard output:\n{e.stdout}")
-        print(f"Standard error:\n{e.stderr}")
+        logger.error(f"Command failed with return code {e.returncode}")
+        logger.error(f"Standard error:\n{e.stderr}")
+        logger.error(f"Standard output:\n{e.stdout}")
+
+    # check if netcdf file was created successfully
+    if not os.path.isfile(f"{tmpfile}.nc"):
+        logger.error(f"Netcdf file {tmpfile}.nc was not created successfully.")
         sys.exit(1)
 
+    # rename latitude and longitude dimensions and variables
+    try:
+        cmd = [
+            "ncrename",
+            "-d",
+            "latitude,lat",
+            "-d",
+            "longitude,lon",
+            "-v",
+            "latitude,lat",
+            "-v",
+            "longitude,lon",
+            f"{tmpfile}.nc",
+            f"{tmp_outfile}"
+        ]
+        result_ncren = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Command failed with return code {e.returncode}")
+        logger.error(f"Standard output:\n{e.stdout}")
+        logger.error(f"Standard error:\n{e.stderr}")
+
+    # check if output file was created successfully
+    if not os.path.isfile(f"{tmp_outfile}"):
+        logger.error(f"Output file {tmp_outfile} was not created successfully.")
+        sys.exit(1)
 
     return tmp_outfile
 
