@@ -193,7 +193,7 @@ def main():
                 else:
                     logger.warning(f"File {work_path}/{var}_{year}-{month}-{day_str}_p{num_level}.nc not created or empty.")
 
-            tmp_outfile2 = cdo.mergetime("-b 64",input=f"{work_path}/{var}_{year}-{month}-*_p{num_level}.nc")
+            tmp_outfile2 = cdo.mergetime(options="-b 64 --reduce_dim",input=f"{work_path}/{var}_{year}-{month}-*_p{num_level}.nc")
             outfile = convert_era5_to_cds(tmp_outfile2, store, proc_archive, era5_info, dataname, year, month, num_level, time_chk, lon_chk, lat_chk)
 
             if os.path.exists(outfile) and os.path.getsize(outfile) > 0:
