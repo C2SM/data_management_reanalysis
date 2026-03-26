@@ -52,7 +52,7 @@ def convert_cc(cc_outfile, workdir, era5_info, year, month):
     return cc_outfile
 
 
-def convert_era5_to_cmip(
+def convert_era5_to_cmip_plev(
     tmp_outfile, outfile, config, era5_info, year, month
 ):
     tmpfile = f'{config.work_path}/{era5_info["short_name"]}_era5_{year}{month}'
@@ -180,7 +180,7 @@ def main():
                         )
                         sys.exit(1)
 
-                outfile_name = convert_era5_to_cmip(
+                outfile_name = convert_era5_to_cmip_plev(
                     tmp_outfile, outfile, cfg, era5_info, year, month
                 )
 
