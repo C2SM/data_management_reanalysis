@@ -224,7 +224,6 @@ def download_data_cds_fc(dataname, cerra_info, origin, workdir, year, months, ov
 
 
 def convert_cerra_to_cmip(tmp_outfile, proc_archive, cerra_info, dataname, year, time_chk, lon_chk, lat_chk):
-    #tmpfile = f'{work_path}/{era5_info["short_name"]}_era5_{year}{month}'
     if "tasmax" in tmp_outfile:
         newname = cerra_info["cmip_name"].replace("tas", "tasmax")
         agg_method = "max"
@@ -239,9 +238,7 @@ def convert_cerra_to_cmip(tmp_outfile, proc_archive, cerra_info, dataname, year,
     tmpfile = f'{str(path_to_tmp.parent)}/{path_to_tmp.stem}'
     outfile = f'{proc_archive}/{newname}_day_{agg_method}_{dataname.lower()}_{year}.nc'
 
-    #os.system(
-    #    f"ncks -O -4 -D 4 --cnk_plc=g3d --cnk_dmn=time,{time_chk} --cnk_dmn=lat,{lat_chk} --cnk_dmn=lon,{lon_chk} -L 1 {tmp_outfile} {tmpfile}_chunked.nc"
-    #)
+
     try:
         cmd = [
             "ncks",
@@ -284,9 +281,7 @@ def convert_cerra_to_cmip(tmp_outfile, proc_archive, cerra_info, dataname, year,
             print(f"Command failed with return code {e.returncode}")
             print(f"Standard output:\n{e.stdout}")
 
-    #os.system(
-    #    f'ncrename -O -v {cerra_info["short_name"]},{cerra_info["cmip_name"]} {tmpfile}_chunked.nc {outfile}'
-    #)
+
     try:
         cmd = [
             "ncrename",
