@@ -50,7 +50,12 @@ def convert_z(tmp_outfile, workdir, era5_info, year, month, day_str):
     # https://confluence.ecmwf.int/display/CKB/ERA5%3A+compute+pressure+and+geopotential+on+model+levels%2C+geopotential+height+and+geometric+height#ERA5:computepressureandgeopotentialonmodellevels,geopotentialheightandgeometricheight-Geopotentialheight
     # Earth's gravitational acceleration [m/s2]
     const = 9.80665
-    cdo.divc(const, tmp_outfile, f'{workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}_divc.nc')
+    try:
+        cdo.divc(const, tmp_outfile, f'{workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}_divc.nc')
+    except RuntimeError as e:
+        logger.error(f"CDO execution failed!")
+        logger.error(f"Error details: {e}")
+        sys.exit(1)
     os.system(f"rm {tmp_outfile}")
     #os.system(
     #    f'ncatted -a units,{era5_info["short_name"]},m,c,"{era5_info["cmip_unit"]}" {workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}_divc.nc {tmp_outfile}'
@@ -63,9 +68,9 @@ def convert_z(tmp_outfile, workdir, era5_info, year, month, day_str):
             text=True,
         )
     except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Standard output:\n{e.stdout}")
-        print(f"Standard error:\n{e.stderr}")
+        logger.error(f"Command failed with return code {e.returncode}")
+        logger.error(f"Standard output:\n{e.stdout}")
+        logger.error(f"Standard error:\n{e.stderr}")
         sys.exit(1)
 
     return tmp_outfile
@@ -218,22 +223,34 @@ def main():
                         sys.exit(1)
 
                 # calculate daily means
-                cdo.daymean(input=tmp_outfile, output=f'{work_path}/{era5_info["short_name"]}_daymean_era5_{year}{month}{day_str}.nc')
+                outfile_daymean = f'{work_path}/{era5_info["short_name"]}_daymean_era5_{year}{month}{day_str}.nc'
+                try:
+                    cdo.daymean(input=tmp_outfile, output=outfile_daymean)
+                except RuntimeError as e:
+                    logger.error(f"CDO execution failed!")
+                    logger.error(f"Error details: {e}")
+                    sys.exit(1)
 
-                if not os.path.isfile(
-                    f"{work_path}/{era5_info['short_name']}_daymean_era5_{year}{month}{day_str}.nc"
-                ):
+                if not os.path.isfile(outfile_daymean) or os.path.getsize(outfile_daymean) == 0:
                     logger.warning(
-                        f"{work_path}/{era5_info['short_name']}_daymean_era5_{year}{month}{day_str}.nc was not processed properly!"
+                        f"{outfile_daymean} was not created or is empty!"
                     )
                 else:
+                    logger.info(
+                        f"{outfile_daymean} was processed successfully!"
+                    )
                     # clean up 1-hr data
                     os.system(f"rm {tmp_outfile}")
 
 
             # concatenate daily files
             daily_file = f"{work_path}/{var}_day_era5_{year}{month}.nc"
-            cdo.mergetime(f'{work_path}/{var}_daymean_era5_{year}{month}*.nc', daily_file)
+            try:
+                cdo.mergetime(f'{work_path}/{var}_daymean_era5_{year}{month}*.nc', daily_file)
+            except RuntimeError as e:
+                logger.error(f"CDO execution failed!")
+                logger.error(f"Error details: {e}")
+                sys.exit(1)
 
 
             outfile_name = convert_era5_to_cmip_plev(
@@ -244,10 +261,8 @@ def main():
 
 
             # calculate monthly mean
-            proc_mon_archive = proc_archive.replace("day", "mon")
-            os.makedirs(proc_mon_archive, exist_ok=True)
-            outfile_mon = outfile_name.replace('day', 'mon')
-            cdo.monmean(input=outfile_name, output=outfile_mon)
+            outfile_mon = calc_mon_mean(proc_archive, outfile_name)
+            logger.info(f"File {outfile_mon} written.")
 
         # -------------------------------------------------
         # Clean up
