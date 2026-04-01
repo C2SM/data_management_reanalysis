@@ -38,7 +38,7 @@ seconds = time.time()
 local_time = time.localtime(seconds)
 # Name the logfile after first of all inputs
 LOG_FILENAME = (
-    f"logfiles/logging_ERA5-Land_cds_daily"
+    f"logfiles/logging_ERA5-Land_cds_daily_stats"
     f"_{local_time.tm_year}{local_time.tm_mon}"
     f"{local_time.tm_mday}{local_time.tm_hour}{local_time.tm_min}"
     f".out"
@@ -47,7 +47,7 @@ LOG_FILENAME = (
 logging.basicConfig(
     filename=LOG_FILENAME,
     filemode="w",
-    format="%(levelname)s %(asctime)s: %(message)s",
+    format="%(asctime)s | %(levelname)s : %(message)s",
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)

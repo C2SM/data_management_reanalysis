@@ -45,7 +45,7 @@ LOG_FILENAME = (
 logging.basicConfig(
     filename=LOG_FILENAME,
     filemode="w",
-    format="%(levelname)s %(asctime)s: %(message)s",
+    format="%(asctime)s | %(levelname)s : %(message)s",
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
