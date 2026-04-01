@@ -15,14 +15,11 @@ import subprocess
 import time
 from pathlib import Path
 import xarray as xr
-from cdo import Cdo
 from datetime import datetime
 
 from functions.file_util import read_era5_info
 from functions.read_config import read_yaml_config
 from functions.general_functions import *
-
-cdo = Cdo()
 
 # -------------------------------------------------
 # Create a simple logger
