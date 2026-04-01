@@ -8,6 +8,7 @@ import logging
 import subprocess
 from cdo import Cdo
 from pathlib import Path
+from functions.file_util import read_cmip_info
 
 cdo = Cdo(debug=True)
 
@@ -489,7 +490,7 @@ def convert_valid_time_latitude_longitude(ncfile, workdir, era5_info, dataname, 
 
     ds.to_netcdf(tmp_outfile, unlimited_dims="time", encoding=encoding, format='NETCDF4')
     # check if tmp_outfile was created successfully
-    if not os.path.isfile(f"{tmp_outfile}"):
+    if not os.path.isfile(f"{tmp_outfile}") or os.path.getsize(f"{tmp_outfile}") == 0:
          logger.error(f"Output file {tmp_outfile} was not created successfully.")
          sys.exit(1)
     else:
@@ -504,17 +505,7 @@ def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, dataname, 
     outfile = f'{proc_archive}/{era5_info["cmip_name"]}_day_{dataname}_{year}{month}.nc'
 
     if store == 'dkrz':
-        try:
-            cmd = [
-                "cdo",
-                "remapcon,/net/atmos/data/era5_cds/gridfile_cds_025.txt",
-                f"{tmp_outfile}",
-                f"{tmpfile}_remapped.nc"
-            ]
-            result_remap = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
-            print(f"Command failed with return code {e.returncode}")
-            print(f"Standard output:\n{e.stdout}")
+        cdo.remapcon("/net/atmos/data/era5_cds/gridfile_cds_025.txt", input=tmp_outfile, output=f"{tmpfile}_remapped.nc")
 
         try:
             cmd = [
@@ -580,9 +571,108 @@ def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, dataname, 
                 print(f"Command failed with return code {e.returncode}")
                 print(f"Standard output:\n{e.stdout}")
 
+    # read cmip standard_name and long_name from cmip6-cmor-tables
+    standard_name, long_name = read_cmip_info(era5_info["cmip_name"])
+    # append standard_name and long_name attributes to variable
+    try:
+        cmd = [
+            "ncatted",
+            "-O",
+            "-a", f"standard_name,{era5_info['cmip_name']},o,c,{standard_name}",
+            "-a", f"long_name,{era5_info['cmip_name']},o,c,{long_name}",
+            f"{outfile}"
+        ]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+
     # check if outfile was created successfully
-    if not os.path.isfile(f"{outfile}"):
+    if not os.path.isfile(f"{outfile}") or os.path.getsize(f"{outfile}") == 0:
         logger.error(f"Output file {outfile} was not created successfully.")
         sys.exit(1)
 
     return outfile
+
+
+def convert_era5_to_cmip_plev(
+    tmp_outfile, outfile, work_path, era5_info, year, month, lat_chk, lon_chk
+):
+    tmpfile = f'{work_path}/{era5_info["short_name"]}_era5_{year}{month}'
+
+    # extract number of p-levels for chunking
+    with xr.open_dataset(f"{tmp_outfile}") as ds:
+        plev = ds.sizes["level"]
+
+
+    cdo.remapcon("/net/atmos/data/era5_cds/gridfile_cds_025.txt", input=tmp_outfile, output=f"{tmpfile}_remapped.nc")
+
+    try:
+        cmd = [
+            "ncks",
+            "-O", "-4", "-D", "4",
+            "--cnk_plc=g3d",
+            f"--cnk_dmn=time,1",
+            f"--cnk_dmn=level,{plev}",
+            f"--cnk_dmn=lat,{lat_chk}",
+            f"--cnk_dmn=lon,{lon_chk}",
+            f"{tmpfile}_remapped.nc",
+            f"{tmpfile}_chunked.nc"
+        ]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+        sys.exit(1)
+
+    try:
+        cmd = [
+            "ncrename",
+            "-O",
+            "-v", f'{era5_info["short_name"]},{era5_info["cmip_name"]}',
+            f"{tmpfile}_chunked.nc",
+            f"{outfile}"
+        ]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+        sys.exit(1)
+
+    # read cmip standard_name and long_name from cmip6-cmor-tables
+    standard_name, long_name = read_cmip_info(era5_info["cmip_name"])
+    # append standard_name and long_name attributes to variable
+    try:
+        cmd = [
+            "ncatted",
+            "-O",
+            "-a", f"standard_name,{era5_info['cmip_name']},o,c,{standard_name}",
+            "-a", f"long_name,{era5_info['cmip_name']},o,c,{long_name}",
+            f"{outfile}"
+        ]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Standard output:\n{e.stdout}")
+
+
+    if not os.path.exists(outfile) or os.path.getsize(outfile) == 0:
+        logger.error(f"File {outfile} was not created successfully.")
+        sys.exit(1)
+
+    return outfile
+
+
+def calc_mon_mean(inpath, infile):
+    # calculate monthly mean from daily files
+    proc_mon_archive = inpath.replace("day", "mon")
+    os.makedirs(proc_mon_archive, exist_ok=True)
+    outfile_mon = infile.replace('day', 'mon')
+    cdo.monmean(input=infile, output=outfile_mon)
+
+    if os.path.exists(outfile_mon) and os.path.getsize(outfile_mon) > 0:
+        logger.info(f"File {outfile_mon} created successfully.")
+    else:
+        logger.warning(f"File {outfile_mon} was not created properly.")
+
+    return outfile_mon
