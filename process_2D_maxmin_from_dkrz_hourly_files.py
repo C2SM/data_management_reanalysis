@@ -64,9 +64,9 @@ def calc_minmax(infile, minmax_file, dayagg, year, month, day_str):
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Standard output:\n{e.stdout}")
-        print(f"Standard error:\n{e.stderr}")
+        logger.error(f"Command failed with return code {e.returncode}")
+        logger.error(f"Standard output:\n{e.stdout}")
+        logger.error(f"Standard error:\n{e.stderr}")
 
     if not os.path.isfile(
         f"{minmax_file}{day_str}.nc"
@@ -79,30 +79,6 @@ def calc_minmax(infile, minmax_file, dayagg, year, month, day_str):
         os.system(f"rm {infile}.nc")
 
     return
-
-
-def calc_mon_mean(path_work, infile, varout, year, month):
-    proc_mon_work = (
-        f'{path_work}/{varout}/mon/native/{year}'
-    )
-    os.makedirs(proc_mon_work, exist_ok=True)
-    outfile_mon = (
-        f'{proc_mon_work}/{varout}_mon_era5_{year}{month}.nc'
-    )
-
-    try:
-        cmd = [
-            "cdo",
-            "monmean",
-            f"{infile}",
-            f"{outfile_mon}"
-        ]
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Standard output:\n{e.stdout}")
-
-    return outfile_mon
 
 # -------------------------------------------------
 
@@ -239,19 +215,11 @@ def main():
                 # concatenate daily files
                 daily_file = f"{work_path}/{varout}_day_era5_{year}{month}.nc"
                 try:
-                    cmd = [
-                        "cdo",
-                        "-b",
-                        "F64",
-                        "mergetime",
-                        f"{minmax_file}*.nc",
-                        f"{daily_file}"
-                    ]
-                    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-                except subprocess.CalledProcessError as e:
-                    print(f"Command failed with return code {e.returncode}")
-                    print(f"Standard output:\n{e.stdout}")
-
+                    cdo.mergetime(options="-b 64", input=f"{minmax_file}*.nc", output=f"{daily_file}")
+                except RuntimeError as e:
+                    logger.error(f"CDO execution failed!")
+                    logger.error(f"Error details: {e}")
+                    sys.exit(1)
 
                 outfile_name = convert_era5_to_cmip(
                     daily_file, varout, outfile, work_path, era5_info, dataname,
