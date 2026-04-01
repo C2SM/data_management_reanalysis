@@ -10,67 +10,47 @@ import json
 import logging
 import os
 from datetime import datetime
-
+import argparse
+import subprocess
+import time
+from pathlib import Path
 import xarray as xr
+from cdo import Cdo
+from datetime import datetime
 
-from functions.file_util import read_config, read_era5_info
+from functions.file_util import read_era5_info
+from functions.read_config import read_yaml_config
+from functions.general_functions import *
+
+cdo = Cdo()
 
 # -------------------------------------------------
 # Create a simple logger
 # -------------------------------------------------
 
-logging.basicConfig(
-    format="%(asctime)s | %(levelname)s : %(message)s", level=logging.INFO
+# Define logfile and logger
+seconds = time.time()
+local_time = time.localtime(seconds)
+# Name the logfile after first of all inputs
+LOG_FILENAME = (
+    f"logfiles/logging_sfcWind_ERA5_dkrz"
+    f"_{local_time.tm_year}{local_time.tm_mon}"
+    f"{local_time.tm_mday}{local_time.tm_hour}{local_time.tm_min}"
+    f".out"
 )
-logger = logging.getLogger()
 
-def copy_data(config, var, era5_info, year):
-    """
-    Copy data from DKRZ
-
-    Parameters
-    ----------
-
-    Returns
-    -------
-    iac_path: string
-        location of copyied data
-    """
-    t0 = datetime.now()
-
-    vparam = era5_info["param"]
-
-    dkrz_path = f"/pool/data/ERA5/E5/sf/an/{config.freq}/{vparam}"
-
-    iac_path = f"{config.path}/{var}"
-
-    os.makedirs(iac_path, exist_ok=True)
-
-    logger.info(f"rsync data from  {dkrz_path} to {iac_path}")
-    os.system(
-        f"rsync -av levante:{dkrz_path}/E5sf00_{config.freq}_{year}-??-??_{vparam}.* {iac_path}"
-    )
-
-    dt = datetime.now() - t0
-    logger.info(f"Success! All data copied in {dt}")
-
-    return iac_path
+logging.basicConfig(
+    filename=LOG_FILENAME,
+    filemode="w",
+    format="%(asctime)s | %(levelname)s : %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
 
 
-def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, year, month, day_str):
-    """
-    Convert grib file to netcdf
-
-    use grib_to_netcdf, adds meaningful variable name and time dimension
-    incl. standard_name and long_name
-    """
-
-    tmpfile = f'{workdir}/tmp_var{era5_info["param"]}_era5'
-    tmp_outfile = f'{workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}.nc'
-    os.system(f"cdo -t ecmwf -setgridtype,regular {grib_file} {tmpfile}.grib")
-    os.system(f"grib_to_netcdf -o  {tmp_outfile} {tmpfile}.grib")
-
-    return tmp_outfile
+# -------------------------------------------------
+# Define functions
+# -------------------------------------------------
 
 
 def compute_wind_from_u_v(u_comp, v_comp):
@@ -93,6 +73,7 @@ def compute_wind_from_u_v(u_comp, v_comp):
 
     return sfcW
 
+
 def calc_wind_daily(infile1, info1, infile2, info2, wind_file, year, month, day_str):
     ds_1 = xr.open_dataset(infile1, mask_and_scale=True)
     ds_2 = xr.open_dataset(infile2, mask_and_scale=True)
@@ -105,47 +86,76 @@ def calc_wind_daily(infile1, info1, infile2, info2, wind_file, year, month, day_
     return da_daily
 
 
-def convert_era5_to_cmip(
-    tmp_outfile, varout, outfile, config, year, month
-):
-    tmpfile = f'{config.work_path}/{varout}_era5_{year}{month}'
-
-    os.system(
-        f"cdo remapcon,/net/atmos/data/era5_cds/gridfile_cds_025.txt {tmp_outfile} {tmpfile}_remapped.nc"
-    )
-    os.system(
-        f"ncks -O -4 -D 4 --cnk_plc=g3d --cnk_dmn=time,1 --cnk_dmn=lat,{config.lat_chk} --cnk_dmn=lon,{config.lon_chk} {tmpfile}_remapped.nc {outfile}"
-    )
-
-    return outfile
-
-
-def calc_mon_mean(path_proc, infile, varout, year, month):
-    proc_mon_archive = (
-        f'{path_proc}/{varout}/mon/native/{year}'
-    )
-    os.makedirs(proc_mon_archive, exist_ok=True)
-    outfile_mon = (
-        f'{proc_mon_archive}/{varout}_mon_era5_{year}{month}.nc'
-    )
-    os.system(f"cdo monmean {outfile_name} {outfile_mon}")
-
 # -------------------------------------------------
 
 
 def main():
     # -------------------------------------------------
+    # Parse command line input
+    # -------------------------------------------------
+    parser = argparse.ArgumentParser(
+        description="Download ERA5 data and process to CMIP like"
+    )
+    parser.add_argument(
+        "-c",
+        "--configname",
+        help="Name of the config yaml file",
+        required=True,
+    )
+    args = parser.parse_args()
+
+    configname = args.configname
+
+    # -------------------------------------------------
     # Read config
     # -------------------------------------------------
-    # read config file
-    cfg = read_config("configs", "era5_dkrz_config_sfcWind.ini")
-    logger.info(f"Read configuration is: {cfg}")
+
+    config = read_yaml_config(configname)
+    logger.info(f"Read configuration as {config}")
+
+    store = config['dataset']['store']
+    dataname = config['dataset']['name'].lower()
+
+    # variable to be processed
+    freq = config['variables']['freq']
+    family = config['variables']['family']
+    level = config['variables']['level']
+    varout = config['variables']['varout1']
+    var1 = config['variables']['var1']
+    var2 = config['variables']['var2']
+
+    logger.info(f"Variable to be processed: {var1} and {var2}, output variable: {varout}")
+
+    # configured paths
+    origin = config['paths']['origin']
+    download_path = config['paths']['download']
+    work_all_path = config['paths']['work']
+    proc_path = config['paths']['proc']
+    work_path = f"{work_all_path}/{varout}/"
+    grib_path = f"{download_path}/{varout}/"
+
+    # time span to download and process
+    startyr = config['time']['startyr']
+    endyr = config['time']['endyr']
+
+    # months is optional, can be one month or list of months
+    try:
+        c_months = config['time']['months']
+        months = convert_month_list(c_months)
+
+        all_months = False
+    except KeyError:
+        months = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
+        all_months = True
+
+    # overwrite files, download from CDS if already exists and reprocess
+    overwrite = config['flags']['overwrite']
 
     # -------------------------------------------------
     # Create directories if do not exist yet
     # -------------------------------------------------
-    os.makedirs(cfg.work_path, exist_ok=True)
-    os.makedirs(cfg.path_proc, exist_ok=True)
+    os.makedirs(work_path, exist_ok=True)
+    os.makedirs(proc_path, exist_ok=True)
 
     standard_name="wind_speed"
     long_name="Near-Surface Wind Speed"
@@ -154,11 +164,7 @@ def main():
     dict_attr ={"standard_name": standard_name, "long_name": long_name, "units": unit,
 				"_FillValue": 1.e+20}
 
-    varout = cfg.varout
-    var1 = cfg.variable1
-    var2 = cfg.variable2
 
-    logger.info(f'Processing variable {varout} from {var1} and {var2}:')
     # read ERA5_variables.json
     era5_info1 = read_era5_info(var1)
 
@@ -172,30 +178,17 @@ def main():
     logger.info(f'unit: {era5_info2["unit"]},')
     logger.info(f'parameterid: {era5_info2["param"]},')
 
-    for year in range(cfg.startyr, cfg.endyr + 1):
+    for year in range(startyr, endyr + 1):
         logger.info(f"Processing year {year}.")
 
         logger.info(f"Copying variable {var1} and {var2}.")
-        grib_path1 = copy_data(cfg, var1, era5_info1, year)
-        grib_path2 = copy_data(cfg, var2, era5_info2, year)
+        download_file1 = download_data_dkrz(freq, era5_info1, origin, grib_path, year, months, all_months, family, level)
+        download_file2 = download_data_dkrz(freq, era5_info2, origin, grib_path, year, months, all_months, family, level)
 
-        proc_archive = f'{cfg.path_proc}/{varout}/day/native/{year}'
+        proc_archive = f'{proc_path}/{varout}/day/native/{year}'
         os.makedirs(proc_archive, exist_ok=True)
 
-        for month in [
-            "01",
-            "02",
-            "03",
-            "04",
-            "05",
-            "06",
-            "07",
-            "08",
-            "09",
-            "10",
-            "11",
-            "12",
-        ]:
+        for month in months:
             outfile = (
                 f'{proc_archive}/{varout}_day_era5_{year}{month}.nc'
             )
@@ -203,22 +196,22 @@ def main():
             num_days = calendar.monthrange(year, int(month))[1]
             days = [*range(1, num_days + 1)]
 
-            wind_file = f'{cfg.work_path}/sfcWind_{cfg.freq}_era5_{year}{month}'
+            wind_file = f'{work_path}/{varout}_{freq}_era5_{year}{month}'
 
             daily_list=list()
             for day in days:
                 day_str = f"{day:02d}"
 
-                grib_file1 = f'{grib_path1}/E5sf00_{cfg.freq}_{year}-{month}-{day_str}_{era5_info1["param"]}.grb'
+                grib_file1 = download_file1.replace("MM-DD", f"{month}-{day_str}")
 
                 tmp_outfile1 = convert_netcdf_add_era5_info(
-                    grib_file1, cfg.work_path, era5_info1, year, month, day_str
+                    grib_file1, work_path, era5_info1, year, month, day_str
                 )
 
-                grib_file2 = f'{grib_path2}/E5sf00_{cfg.freq}_{year}-{month}-{day_str}_{era5_info2["param"]}.grb'
+                grib_file2 = download_file2.replace("MM-DD", f"{month}-{day_str}")
 
                 tmp_outfile2 = convert_netcdf_add_era5_info(
-                    grib_file2, cfg.work_path, era5_info2, year, month, day_str
+                    grib_file2, work_path, era5_info2, year, month, day_str
                 )
 
                 daily_wind = calc_wind_daily(tmp_outfile1, era5_info1, tmp_outfile2, era5_info2, wind_file, year, month, day_str)
@@ -226,40 +219,32 @@ def main():
                 daily_list.append(daily_wind)
 
             # concatenate daily files
-            daily_file = f"{cfg.work_path}/{varout}_day_era5_{year}{month}.nc"
+            daily_file = f"{work_path}/{varout}_day_era5_{year}{month}.nc"
             da_daily_wind = xr.concat(daily_list, dim='time')
 
             dates = pd.date_range(start=f'{year}-{month}-01', periods=num_days, freq='D')
 
             ds_out = da_daily_wind.assign_attrs(dict_attr).assign_coords(time=dates).to_dataset(name=varout)
 
-            ds_out.to_netcdf(daily_file, encoding={varout: {"chunksizes": (cfg.time_chk, cfg.lat_chk, cfg.lon_chk)}})
+            ds_out.to_netcdf(daily_file, encoding={varout: {"chunksizes": (config["chunking"]["time_chk"], config["chunking"]["lat_chk"], config["chunking"]["lon_chk"])}})
             logger.info("Data written to %s", daily_file)
 
             outfile_name = convert_era5_to_cmip(
-                daily_file, varout, outfile, cfg, year, month
+                daily_file, store, proc_archive, era5_info, dataname, year, month, config["chunking"]["time_chk"], config["chunking"]["lat_chk"], config["chunking"]["lon_chk"]
             )
 
             logger.info(f"File {outfile_name} written.")
 
-        # calculate monthly mean
-        proc_mon_archive = (
-            f'{cfg.path_proc}/{varout}/mon/native/{year}'
-        )
-        os.makedirs(proc_mon_archive, exist_ok=True)
-        outfile_mon = (
-            f'{proc_mon_archive}/{varout}_mon_era5_{year}{month}.nc'
-        )
-        os.system(f"cdo monmean {outfile_name} {outfile_mon}")
-
-        logger.info(f"File {outfile_mon} written.")
+            # calculate monthly mean
+            outfile_mon = calc_mon_mean(proc_archive, outfile_name)
+            logger.info(f"File {outfile_mon} written.")
 
         # -------------------------------------------------
         # Clean up
         # -------------------------------------------------
-        #os.system(f"rm {cfg.work_path}/{varout}_*")
-        #os.system(f"rm {cfg.work_path}/{var}_*")
-        #os.system(f"rm {grib_path}/*")
+        os.system(f"rm {work_path}/{varout}_*")
+        os.system(f"rm {work_path}/{var}_*")
+        os.system(f"rm {grib_path}/*")
 
 
 if __name__ == "__main__":
