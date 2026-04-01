@@ -9,6 +9,7 @@ Purpose: utility functions to process ERA5 data downloaded from dkrz
 import json
 import os
 import logging
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -130,3 +131,12 @@ def read_cerra_info(vname):
         logger.info(f'cmipunit: {cerra_info["cmip_unit"]}.')
 
     return cerra_info
+
+
+def read_cmip_info(cmip_name):
+    url = 'https://raw.githubusercontent.com/PCMDI/cmip6-cmor-tables/refs/heads/main/Tables/CMIP6_day.json'
+    resp = requests.get(url)
+    data = json.loads(resp.text)
+    #print(data)
+
+    return data["variable_entry"][cmip_name]["standard_name"], data["variable_entry"][cmip_name]["long_name"]
