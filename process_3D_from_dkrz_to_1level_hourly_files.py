@@ -8,8 +8,11 @@ import sys
 import yaml
 import logging
 from datetime import datetime
+import time
 import argparse
 import calendar
+from pathlib import Path
+import subprocess
 import xarray as xr
 from cdo import Cdo
 
@@ -19,7 +22,9 @@ from functions.general_functions import convert_month_list, download_data_dkrz, 
 
 cdo = Cdo()
 
+# -------------------------------------------------
 # Define logfile and logger
+# -------------------------------------------------
 seconds = time.time()
 local_time = time.localtime(seconds)
 # Name the logfile after first of all inputs
@@ -38,13 +43,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# -------------------------------------------------
+# Define functions
+# -------------------------------------------------
 
 def convert_era5_to_cds(tmp_outfile_in, store, proc_archive, era5_info, dataname, year, month, num_level, time_chk, lon_chk, lat_chk):
     path_to_tmp = Path(tmp_outfile_in)
     tmpfile = f'{str(path_to_tmp.parent)}/{str(path_to_tmp.stem)}'
-    outfile = f'{proc_archive}/{era5_info["cmip_name"]}_1hr_{dataname}_{year}{month}_p{num_level}.nc'
+    outfile = f'{proc_archive}/{era5_info["short_name"]}_1hr_{dataname}_{year}{month}_p{num_level}.nc'
 
-    cdo.remapcon("/net/atmos/data/era5_cds/gridfile_cds_025.txt", input=tmp_outfile_in, output=f"{tmpfile}_remapped.nc")
+    try:
+        cdo.remapcon("/net/atmos/data/era5_cds/gridfile_cds_025.txt", input=tmp_outfile_in, output=f"{tmpfile}_remapped.nc")
+    except RuntimeError as e:
+        logger.error(f"CDO execution failed!")
+        logger.error(f"Error details: {e}")
+        sys.exit(1)
 
     try:
         cmd = [
@@ -110,7 +123,6 @@ def main():
     family = config['variables']['family']
     level = config['variables']['level']
     num_level = config['variables']['num_level']
-    print(f"Variable to be processed: {var}")
 
     # configured paths
     origin = config['paths']['origin']
@@ -134,9 +146,6 @@ def main():
         months = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
         all_months = True
 
-    # overwrite files, download from CDS if already exists and reprocess
-    overwrite = config['flags']['overwrite']
-
     # -------------------------------------------------
     # Create directories if do not exist yet
     # -------------------------------------------------
@@ -155,7 +164,6 @@ def main():
     for year in range(startyr, endyr + 1):
         logger.info(f"Processing year {year}.")
 
-        print(store)
         if store == 'dkrz':
             download_file = download_data_dkrz(
                 freq=freq, era5_info=era5_info, origin=origin, iac_path=grib_path,
@@ -164,7 +172,6 @@ def main():
         else:
             download_success = f"Warning, download from store {store} not implemented."
         logger.info(download_success)
-        print(download_file)
 
         proc_archive = f'{proc_path}/{var}/1hr/native/{year}'
         os.makedirs(proc_archive, exist_ok=True)
@@ -183,7 +190,12 @@ def main():
                 )
 
                 # extract level, numeric value given in config by num_level
-                cdo.sellevel(num_level, input=tmp_outfile, output=f"{work_path}/{var}_{year}-{month}-{day_str}_p{num_level}.nc")
+                try:
+                    cdo.sellevel(num_level, input=tmp_outfile, output=f"{work_path}/{var}_{year}-{month}-{day_str}_p{num_level}.nc")
+                except RuntimeError as e:
+                    logger.error(f"CDO execution failed!")
+                    logger.error(f"Error details: {e}")
+                    sys.exit(1)
 
                 # check of output file exists and is not empty, if so remove the grib file and the temporary netcdf file
                 if (os.path.exists(f"{work_path}/{var}_{year}-{month}-{day_str}_p{num_level}.nc") and
@@ -194,7 +206,13 @@ def main():
                 else:
                     logger.warning(f"File {work_path}/{var}_{year}-{month}-{day_str}_p{num_level}.nc not created or empty.")
 
-            tmp_outfile2 = cdo.mergetime(options="-b 64 --reduce_dim", input=f"{work_path}/{var}_{year}-{month}-*_p{num_level}.nc")
+            try:
+                tmp_outfile2 = cdo.mergetime(options="-b 64 --reduce_dim", input=f"{work_path}/{var}_{year}-{month}-*_p{num_level}.nc")
+            except RuntimeError as e:
+                logger.error(f"CDO execution failed!")
+                logger.error(f"Error details: {e}")
+                sys.exit(1)
+
             outfile = convert_era5_to_cds(tmp_outfile2, store, proc_archive, era5_info, dataname, year, month,
                 num_level, config['chunking']['time_chk'], config['chunking']['lon_chk'], config['chunking']['lat_chk'])
 
