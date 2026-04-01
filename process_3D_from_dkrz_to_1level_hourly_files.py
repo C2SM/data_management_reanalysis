@@ -15,7 +15,7 @@ from cdo import Cdo
 
 from functions.file_util import read_era5_info
 from functions.read_config import read_yaml_config
-from functions.general_functions import *
+from functions.general_functions import convert_month_list, download_data_dkrz, convert_netcdf_add_era5_info, calc_mon_mean
 
 cdo = Cdo()
 
@@ -39,12 +39,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def convert_era5_to_cds(tmp_outfile, store, proc_archive, era5_info, dataname, year, month, num_level, time_chk, lon_chk, lat_chk):
-    path_to_tmp = Path(tmp_outfile)
-    tmpfile = f'{str(path_to_tmp.parent)}/{path_to_tmp.stem}'
-    outfile = f'{proc_archive}/{era5_info["cmip_name"]}_1hr_{dataname}_{year}{month}_p{num_level}.nc.nc'
+def convert_era5_to_cds(tmp_outfile_in, store, proc_archive, era5_info, dataname, year, month, num_level, time_chk, lon_chk, lat_chk):
+    path_to_tmp = Path(tmp_outfile_in)
+    tmpfile = f'{str(path_to_tmp.parent)}/{str(path_to_tmp.stem)}'
+    outfile = f'{proc_archive}/{era5_info["cmip_name"]}_1hr_{dataname}_{year}{month}_p{num_level}.nc'
 
-    cdo.remapcon("/net/atmos/data/era5_cds/gridfile_cds_025.txt", input=tmp_outfile, output=f"{tmpfile}_remapped.nc")
+    cdo.remapcon("/net/atmos/data/era5_cds/gridfile_cds_025.txt", input=tmp_outfile_in, output=f"{tmpfile}_remapped.nc")
 
     try:
         cmd = [
@@ -56,7 +56,7 @@ def convert_era5_to_cds(tmp_outfile, store, proc_archive, era5_info, dataname, y
             f"--cnk_dmn=lon,{lon_chk}",
             "-L", "1",
             f"{tmpfile}_remapped.nc",
-            f"{tmpfile}_chunked.nc"
+            f"{outfile}"
         ]
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
@@ -158,7 +158,8 @@ def main():
         print(store)
         if store == 'dkrz':
             download_file = download_data_dkrz(
-                freq=freq, era5_info=era5_info, origin=origin, iac_path=grib_path, year=year, months=months, all_months=all_months, family=family, level=level)
+                freq=freq, era5_info=era5_info, origin=origin, iac_path=grib_path,
+                year=year, months=months, all_months=all_months, family=family, level=level)
             download_success = f"Data download successful!"
         else:
             download_success = f"Warning, download from store {store} not implemented."
@@ -175,18 +176,18 @@ def main():
                 day_str = f"{day:02d}"
                 print(day_str)
 
-                #grib_file = f'{grib_path}/E5pl00_{freq}_{year}-{month}-{day_str}_{era5_info["param"]}.grb'
                 grib_file = download_file.replace("MM", month).replace("DD", day_str)
 
                 tmp_outfile = convert_netcdf_add_era5_info(
                     grib_file, work_path, era5_info, dataname, year, month, day=day_str
                 )
-                print(tmp_outfile)
+
                 # extract level, numeric value given in config by num_level
                 cdo.sellevel(num_level, input=tmp_outfile, output=f"{work_path}/{var}_{year}-{month}-{day_str}_p{num_level}.nc")
 
                 # check of output file exists and is not empty, if so remove the grib file and the temporary netcdf file
-                if os.path.exists(f"{work_path}/{var}_{year}-{month}-{day_str}_p{num_level}.nc") and os.path.getsize(f"{work_path}/{var}_{year}-{month}-{day_str}_p{num_level}.nc") > 0:
+                if (os.path.exists(f"{work_path}/{var}_{year}-{month}-{day_str}_p{num_level}.nc") and
+                    os.path.getsize(f"{work_path}/{var}_{year}-{month}-{day_str}_p{num_level}.nc") > 0):
                     logger.info(f"File {work_path}/{var}_{year}-{month}-{day_str}_p{num_level}.nc created successfully.")
                     os.system(f"rm {tmp_outfile}")
                     os.system(f"rm {grib_file}")
@@ -194,7 +195,8 @@ def main():
                     logger.warning(f"File {work_path}/{var}_{year}-{month}-{day_str}_p{num_level}.nc not created or empty.")
 
             tmp_outfile2 = cdo.mergetime(options="-b 64 --reduce_dim", input=f"{work_path}/{var}_{year}-{month}-*_p{num_level}.nc")
-            outfile = convert_era5_to_cds(tmp_outfile2, store, proc_archive, era5_info, dataname, year, month, num_level, time_chk, lon_chk, lat_chk)
+            outfile = convert_era5_to_cds(tmp_outfile2, store, proc_archive, era5_info, dataname, year, month,
+                num_level, config['chunking']['time_chk'], config['chunking']['lon_chk'], config['chunking']['lat_chk'])
 
             if os.path.exists(outfile) and os.path.getsize(outfile) > 0:
                 logger.info(f"File {outfile} created successfully.")
