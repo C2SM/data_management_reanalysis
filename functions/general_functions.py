@@ -71,9 +71,9 @@ def download_data_dkrz(freq, era5_info, origin, iac_path, year, months, all_mont
             ]
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as e:
-            print(f"Command failed with return code {e.returncode}")
-            print(f"Standard output:\n{e.stdout}")
-            print(f"Standard error:\n{e.stderr}")
+            logger.error(f"Command failed with return code {e.returncode}")
+            logger.error(f"Standard output:\n{e.stdout}")
+            logger.error(f"Standard error:\n{e.stderr}")
     else:
         for month in months:
             files_to_copy = f'{dkrz_path}/*_{year}-{month}*_{vparam}.grb'
@@ -86,9 +86,9 @@ def download_data_dkrz(freq, era5_info, origin, iac_path, year, months, all_mont
                 ]
                 result = subprocess.run(cmd, check=True, capture_output=True, text=True)
             except subprocess.CalledProcessError as e:
-                print(f"Command failed with return code {e.returncode}")
-                print(f"Standard output:\n{e.stdout}")
-                print(f"Standard error:\n{e.stderr}")
+                logger.error(f"Command failed with return code {e.returncode}")
+                logger.error(f"Standard output:\n{e.stdout}")
+                logger.error(f"Standard error:\n{e.stderr}")
     if freq == "1D":
         gribfile = f'{iac_path}{family}{level}{typeid}_{freq}_{year}-MM_{vparam}.grb'
     elif freq == "1H":
@@ -165,16 +165,13 @@ def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, dataname, year, 
 
     # Set grid type to ecmwf regular, otherwise grib_to_netcdf will fail
     try:
-        cmd = f"cdo -t ecmwf -setgridtype,regular {grib_file} {tmpfile}.grib"
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True, shell=True)
-        print(f"CDO command output:\n{result.stdout}")
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Command failed with return code {e.returncode}")
-        logger.error(f"Standard error:\n{e.stderr}")
-        logger.error(f"Standard output:\n{e.stdout}")
+        cdo.setgridtype("regular", input=grib_file, output=f"{tmpfile}.grib", options="-t ecmwf")
+    except RuntimeError as e:
+        logger.error(f"CDO execution failed!")
+        logger.error(f"Error details: {e}")
 
     # check if grib file was created successfully
-    if not os.path.isfile(f"{tmpfile}.grib"):
+    if not os.path.isfile(f"{tmpfile}.grib") or os.path.getsize(f"{tmpfile}.grib") == 0:
         logger.error(f"Grib file {tmpfile}.grib was not created successfully.")
         sys.exit(1)
 
@@ -192,7 +189,7 @@ def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, dataname, year, 
         logger.error(f"Standard output:\n{e.stdout}")
 
     # check if netcdf file was created successfully
-    if not os.path.isfile(f"{tmpfile}.nc"):
+    if not os.path.isfile(f"{tmpfile}.nc") or os.path.getsize(f"{tmpfile}.nc") == 0:
         logger.error(f"Netcdf file {tmpfile}.nc was not created successfully.")
         sys.exit(1)
 
@@ -200,6 +197,7 @@ def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, dataname, year, 
     try:
         cmd = [
             "ncrename",
+            "-O",
             "-d",
             "latitude,lat",
             "-d",
@@ -218,7 +216,7 @@ def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, dataname, year, 
         logger.error(f"Standard error:\n{e.stderr}")
 
     # check if output file was created successfully
-    if not os.path.isfile(f"{tmp_outfile}"):
+    if not os.path.isfile(f"{tmp_outfile}") or os.path.getsize(f"{tmp_outfile}") == 0:
         logger.error(f"Output file {tmp_outfile} was not created successfully.")
         sys.exit(1)
 
@@ -306,10 +304,10 @@ def convert_tcc(tcc_outfile, workdir, data_info, dataname, year, month):
         try:
             tmpfile_mulc = cdo.mulc("100", options="-b F64",
                     input=tcc_outfile)
-            print(f"CDO mulc result: {tmpfile_mulc}")
+            logger.info(f"CDO mulc result: {tmpfile_mulc}")
         except RuntimeError as e:
-            print(f"CDO execution failed!")
-            print(f"Error details: {e}")
+            logger.error(f"CDO execution failed!")
+            logger.error(f"Error details: {e}")
         # check if tmpfile_mulc was created successfully
         if not os.path.isfile(f"{tmpfile_mulc}"):
             logger.error(f"Output file {tmpfile_mulc} was not created successfully.")
@@ -505,7 +503,11 @@ def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, dataname, 
     outfile = f'{proc_archive}/{era5_info["cmip_name"]}_day_{dataname}_{year}{month}.nc'
 
     if store == 'dkrz':
-        cdo.remapcon("/net/atmos/data/era5_cds/gridfile_cds_025.txt", input=tmp_outfile, output=f"{tmpfile}_remapped.nc")
+        try:
+            cdo.remapcon("/net/atmos/data/era5_cds/gridfile_cds_025.txt", input=tmp_outfile, output=f"{tmpfile}_remapped.nc")
+        except RuntimeError as e:
+            logger.error(f"CDO execution failed!")
+            logger.error(f"Error details: {e}")
 
         try:
             cmd = [
@@ -521,8 +523,8 @@ def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, dataname, 
             ]
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as e:
-            print(f"Command failed with return code {e.returncode}")
-            print(f"Standard output:\n{e.stdout}")
+            logger.error(f"Command failed with return code {e.returncode}")
+            logger.error(f"Standard output:\n{e.stdout}")
     else:
 
         try:
@@ -539,8 +541,8 @@ def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, dataname, 
             ]
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as e:
-            print(f"Command failed with return code {e.returncode}")
-            print(f"Standard output:\n{e.stdout}")
+            logger.error(f"Command failed with return code {e.returncode}")
+            logger.error(f"Standard output:\n{e.stdout}")
     try:
         cmd = [
             "ncrename",
@@ -552,11 +554,11 @@ def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, dataname, 
         ]
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Standard output:\n{e.stdout}")
+        logger.error(f"Command failed with return code {e.returncode}")
+        logger.error(f"Standard output:\n{e.stdout}")
 
         if era5_info["short_name"]=='2t':
-            print(f"Try with using t2m instead 2t.")
+            logger.info(f"Try with using t2m instead 2t.")
             try:
                 cmd = [
                     "ncrename",
@@ -568,8 +570,8 @@ def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, dataname, 
                 ]
                 result = subprocess.run(cmd, check=True, capture_output=True, text=True)
             except subprocess.CalledProcessError as e:
-                print(f"Command failed with return code {e.returncode}")
-                print(f"Standard output:\n{e.stdout}")
+                logger.error(f"Command failed with return code {e.returncode}")
+                logger.error(f"Standard output:\n{e.stdout}")
 
     # read cmip standard_name and long_name from cmip6-cmor-tables
     standard_name, long_name = read_cmip_info(era5_info["cmip_name"])
@@ -584,8 +586,8 @@ def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, dataname, 
         ]
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Standard output:\n{e.stdout}")
+        logger.error(f"Command failed with return code {e.returncode}")
+        logger.error(f"Standard output:\n{e.stdout}")
 
     # check if outfile was created successfully
     if not os.path.isfile(f"{outfile}") or os.path.getsize(f"{outfile}") == 0:
@@ -604,8 +606,11 @@ def convert_era5_to_cmip_plev(
     with xr.open_dataset(f"{tmp_outfile}") as ds:
         plev = ds.sizes["level"]
 
-
-    cdo.remapcon("/net/atmos/data/era5_cds/gridfile_cds_025.txt", input=tmp_outfile, output=f"{tmpfile}_remapped.nc")
+    try:
+        cdo.remapcon("/net/atmos/data/era5_cds/gridfile_cds_025.txt", input=tmp_outfile, output=f"{tmpfile}_remapped.nc")
+    except RuntimeError as e:
+        logger.error(f"CDO execution failed!")
+        logger.error(f"Error details: {e}")
 
     try:
         cmd = [
@@ -621,8 +626,8 @@ def convert_era5_to_cmip_plev(
         ]
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Standard output:\n{e.stdout}")
+        logger.error(f"Command failed with return code {e.returncode}")
+        logger.error(f"Standard output:\n{e.stdout}")
         sys.exit(1)
 
     try:
@@ -635,8 +640,8 @@ def convert_era5_to_cmip_plev(
         ]
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Standard output:\n{e.stdout}")
+        logger.error(f"Command failed with return code {e.returncode}")
+        logger.error(f"Standard output:\n{e.stdout}")
         sys.exit(1)
 
     # read cmip standard_name and long_name from cmip6-cmor-tables
@@ -652,8 +657,8 @@ def convert_era5_to_cmip_plev(
         ]
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Standard output:\n{e.stdout}")
+        logger.error(f"Command failed with return code {e.returncode}")
+        logger.error(f"Standard output:\n{e.stdout}")
 
 
     if not os.path.exists(outfile) or os.path.getsize(outfile) == 0:
@@ -668,7 +673,11 @@ def calc_mon_mean(inpath, infile):
     proc_mon_archive = inpath.replace("day", "mon")
     os.makedirs(proc_mon_archive, exist_ok=True)
     outfile_mon = infile.replace('day', 'mon')
-    cdo.monmean(input=infile, output=outfile_mon)
+    try:
+        cdo.monmean(input=infile, output=outfile_mon)
+    except RuntimeError as e:
+        logger.error(f"CDO execution failed!")
+        logger.error(f"Error details: {e}")
 
     if os.path.exists(outfile_mon) and os.path.getsize(outfile_mon) > 0:
         logger.info(f"File {outfile_mon} created successfully.")
