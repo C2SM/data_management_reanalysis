@@ -45,8 +45,12 @@ logger = logging.getLogger(__name__)
 
 
 def convert_cc(cc_outfile, workdir, era5_info, year, month):
+    try:
+        cdo.mulc(100, input=cc_outfile, output=f"{workdir}/{era5_info['short_name']}_era5_{year}{month}_mulc.nc", options="-b F64")
+    except RuntimeError as e:
+        logger.error(f"CDO execution failed!")
+        logger.error(f"Error details: {e}")
 
-    cdo.mulc(100, input=cc_outfile, output=f"{workdir}/{era5_info['short_name']}_era5_{year}{month}_mulc.nc", options="-b F64")
     os.system(f'rm {workdir}/{era5_info["short_name"]}_era5_{year}{month}.nc')
     os.system(
         f'ncatted -a units,{era5_info["short_name"]},m,c,"{era5_info["cmip_unit"]}" {workdir}/{era5_info["short_name"]}_era5_{year}{month}_mulc.nc {cc_outfile}'
@@ -170,9 +174,7 @@ def main():
         os.makedirs(proc_archive, exist_ok=True)
 
         for month in months:
-            grib_file = (
-                f'{grib_path}/E5pl00_1D_{year}-{month}_{era5_info["param"]}.grb'
-            )
+            grib_file = download_file.replace("MM", f"{month}")
             outfile = (
                 f'{proc_archive}/{era5_info["cmip_name"]}_day_{dataname}_{year}{month}.nc'
             )
@@ -204,10 +206,8 @@ def main():
             logger.info(f"File {outfile_name} written.")
 
             # calculate monthly mean
-            proc_mon_archive = proc_archive.replace("day", "mon")
-            os.makedirs(proc_mon_archive, exist_ok=True)
-            outfile_mon = outfile_name.replace('day', 'mon')
-            cdo.monmean(input=outfile_name, output=outfile_mon)
+            outfile_mon = calc_mon_mean(proc_archive, outfile_name)
+            logger.info(f"File {outfile_mon} written.")
 
         # -------------------------------------------------
         # Clean up
