@@ -223,6 +223,12 @@ def main():
             else:
                 logger.warning(f"File {outfile} not created or empty.")
 
+            # clean up the work directory for the month
+            os.system(f"rm {work_path}/tmp_var???_{dataname}_{year}{month}*")
+
+        # clean up the work directory for the year
+        os.system(f"rm {work_path}/{var}_{year}-*_p{num_level}.nc")
+        os.system(f"rm {grib_path}/*.grb")
 
 if __name__ == "__main__":
     main()
