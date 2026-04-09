@@ -1,5 +1,15 @@
 #!/usr/bin/env python
-
+# -*- coding: utf-8 -*-
+"""
+File Name : process_3D_from_dkrz_to_1level_hourly_files.py
+Author: Ruth Lorenz (ruth.lorenz@c2sm.ethz.ch)
+Created: 25/03/2026
+Purpose: dowload 3D data from DKRZ, extract lowest level (p1000)
+        convert to CDS grid,
+        keep only the time, lat and lon dimensions
+        default config: configs/Config_era5_1h_pl_dkrz.yaml
+        env: iacpy3_2025
+"""
 # -------------------------------------------------
 # Getting libraries and utilities
 # -------------------------------------------------
