@@ -42,7 +42,8 @@ def download_data_dkrz(freq, era5_info, origin, iac_path, year, months, all_mont
     Download data from DKRZ
 
     Return:
-    name of the grib file
+    name pattern of the grib file,
+    MM instead month number, DD instead day number (if applicable), to be replaced in processing loop
     """
 
     param = int(era5_info["param"])
@@ -101,7 +102,7 @@ def download_data_cds(dataname, era5_info, origin, workdir, year, months, overwr
     Download data from CDS
 
     Returns:
-    Name of the netcdfs in general form (MM instead single months)
+    Name of the netcdfs in general form (MM instead single months, to be replaced in processing loop)
 
     """
     import cdsapi
@@ -232,6 +233,8 @@ def py_grib_to_netcdf(
     """
     Convert a GRIB file to NetCDF while preserving the exact time axis.
     Time is encoded as numeric hours since the GRIB reference time.
+
+    rather use grib_to_netcdf or cdo.copy(options="-f nc4 sorttaxis") if possible
     """
     start = time.perf_counter()
 
@@ -298,7 +301,12 @@ def py_grib_to_netcdf(
 
 
 def convert_tcc(tcc_outfile, workdir, data_info, dataname, year, month):
-    #tmpfile_mulc = f'{workdir}/{data_info["short_name"]}_{dataname.lower()}_{year}{month}_mulc.nc'
+    """
+        Convert total cloud cover from (0 - 1) to % and set unit attribute to cmip unit
+
+        Returns:
+        Name of the netcdf file with converted units
+    """
     if (data_info["unit"]=='(0 - 1)' ) and data_info["cmip_unit"]=="%":
         logger.info(f"Converting from {data_info['unit']} to {data_info['cmip_unit']} for variable {data_info['short_name']}.")
         try:
@@ -309,7 +317,7 @@ def convert_tcc(tcc_outfile, workdir, data_info, dataname, year, month):
             logger.error(f"CDO execution failed!")
             logger.error(f"Error details: {e}")
         # check if tmpfile_mulc was created successfully
-        if not os.path.isfile(f"{tmpfile_mulc}"):
+        if not os.path.isfile(f"{tmpfile_mulc}") or os.path.getsize(f"{tmpfile_mulc}") == 0:
             logger.error(f"Output file {tmpfile_mulc} was not created successfully.")
             sys.exit(1)
 
@@ -341,7 +349,7 @@ def convert_tcc(tcc_outfile, workdir, data_info, dataname, year, month):
         logger.error(f'Not implemented error. Conversion for conversion from {data_info["unit"]} to {data_info["cmip_unit"]} not available.')
 
     # check if tcc_outfile was created successfully
-    if not os.path.isfile(f"{tcc_outfile}"):
+    if not os.path.isfile(f"{tcc_outfile}") or os.path.getsize(f"{tcc_outfile}") == 0:
         logger.error(f"Output file {tcc_outfile} was not created successfully.")
         sys.exit(1)
 
@@ -349,6 +357,12 @@ def convert_tcc(tcc_outfile, workdir, data_info, dataname, year, month):
 
 
 def convert_tp(tp_outfile, workdir, data_info, dataname, year, month):
+    """
+        Convert total precipitation from m or kg m-2 to kg m-2 s-1 and set unit attribute to cmip unit
+
+        Returns:
+        Name of the netcdf file with converted units
+    """
     if (data_info["unit"]=='m' or data_info["unit"]=='kg m-2') and data_info["cmip_unit"]=="kg m-2 s-1":
         logger.info(f"Converting from {data_info['unit']} to {data_info['cmip_unit']} for variable {data_info['short_name']}.")
         try:
@@ -358,7 +372,7 @@ def convert_tp(tp_outfile, workdir, data_info, dataname, year, month):
             logger.error(f"CDO execution failed!")
             logger.error(f"Error details: {e}")
         # check if output file was created successfully
-        if not os.path.isfile(tmpfile_divc):
+        if not os.path.isfile(tmpfile_divc) or os.path.getsize(f"{tmpfile_divc}") == 0:
             logger.error(f"Output file {tmpfile_divc} was not created successfully.")
             sys.exit(1)
 
@@ -401,7 +415,7 @@ def convert_tp(tp_outfile, workdir, data_info, dataname, year, month):
 
 
         # check if tp_outfile was created successfully
-        if not os.path.isfile(f"{tp_outfile}"):
+        if not os.path.isfile(f"{tp_outfile}") or os.path.getsize(f"{tp_outfile}") == 0:
             logger.error(f"Output file {tp_outfile} was not created successfully.")
             sys.exit(1)
     else:
@@ -411,6 +425,12 @@ def convert_tp(tp_outfile, workdir, data_info, dataname, year, month):
 
 
 def convert_radiation(rad_outfile, workdir, data_info, dataname, year, month):
+    """
+        Convert radiation from J m-2 to W m-2 and set unit attribute to cmip unit
+
+        Returns:
+        Name of the netcdf file with converted units
+    """
     if (data_info["unit"]=='J m-2' ) and data_info["cmip_unit"]=="W m-2":
         logger.info(f"Converting from {data_info['unit']} to {data_info['cmip_unit']} for variable {data_info['short_name']}.")
         try:
@@ -419,7 +439,7 @@ def convert_radiation(rad_outfile, workdir, data_info, dataname, year, month):
             logger.error(f"CDO execution failed!")
             logger.error(f"Error details: {e}")
         # check if output file was created successfully
-        if not os.path.isfile(tmpfile_divc):
+        if not os.path.isfile(tmpfile_divc) or os.path.getsize(f"{tmpfile_divc}") == 0:
             logger.error(f"Output file {tmpfile_divc} was not created successfully.")
             sys.exit(1)
 
@@ -450,7 +470,7 @@ def convert_radiation(rad_outfile, workdir, data_info, dataname, year, month):
         logger.error(f'Not implemented error. Conversion for conversion from {data_info["unit"]} to {data_info["cmip_unit"]} not available.')
         sys.exit(1)
     # check if rad_outfile was created successfully
-    if not os.path.isfile(f"{rad_outfile}"):
+    if not os.path.isfile(f"{rad_outfile}") or os.path.getsize(f"{rad_outfile}") == 0:
         logger.error(f"Output file {rad_outfile} was not created successfully.")
         sys.exit(1)
 
@@ -459,11 +479,14 @@ def convert_radiation(rad_outfile, workdir, data_info, dataname, year, month):
 
 def convert_valid_time_latitude_longitude(ncfile, workdir, era5_info, dataname, year, month):
     """
-    Convert netcdf to same structure as netcdf converted from grib using grib_to_netcdf
+    Convert netcdf downloaded from CDS to same structure as netcdf converted from grib using grib_to_netcdf
 
-    time instead valid_time in units = "hours since ...."
-    lon instead longitude
-    lat instead latitude
+    - time instead valid_time in units = "hours since ...."
+    - lon instead longitude
+    - lat instead latitude
+
+    Returns:
+    Name of the netcdf file with converted time, lat, lon
     """
 
     ds = xr.open_dataset(ncfile)
@@ -498,6 +521,17 @@ def convert_valid_time_latitude_longitude(ncfile, workdir, era5_info, dataname, 
 
 
 def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, dataname, year, month, time_chk, lon_chk, lat_chk):
+    """
+    Convert netcdf to cmip compliant netcdf
+        - remap to CDS grid if data is stored at DKRZ
+        - chunking
+        - rename variable to cmip name
+        - add standard_name and long_name attributes
+
+    Returns:
+    Name of the netcdf file with renamed variable and added attributes
+    """
+
     path_to_tmp = Path(tmp_outfile)
     tmpfile = f'{str(path_to_tmp.parent)}/{path_to_tmp.stem}'
     outfile = f'{proc_archive}/{era5_info["cmip_name"]}_day_{dataname}_{year}{month}.nc'
@@ -600,6 +634,16 @@ def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, dataname, 
 def convert_era5_to_cmip_plev(
     tmp_outfile, outfile, work_path, era5_info, year, month, lat_chk, lon_chk
 ):
+    """
+    Convert netcdf to cmip compliant netcdf for plev variables
+        - remap to CDS grid if data is stored at DKRZ
+        - chunking with plev dimension
+        - rename variable to cmip name
+        - add standard_name and long_name attributes
+
+    Returns:
+    Name of the netcdf file with renamed variable and added attributes
+    """
     tmpfile = f'{work_path}/{era5_info["short_name"]}_era5_{year}{month}'
 
     # extract number of p-levels for chunking
@@ -669,6 +713,13 @@ def convert_era5_to_cmip_plev(
 
 
 def calc_mon_mean(inpath, infile):
+    """
+    Calculate monthly mean from daily files
+
+    Returns:
+    Name of the netcdf file with monthly mean values
+    """
+
     # calculate monthly mean from daily files
     proc_mon_archive = inpath.replace("day", "mon")
     os.makedirs(proc_mon_archive, exist_ok=True)
@@ -679,9 +730,8 @@ def calc_mon_mean(inpath, infile):
         logger.error(f"CDO execution failed!")
         logger.error(f"Error details: {e}")
 
-    if os.path.exists(outfile_mon) and os.path.getsize(outfile_mon) > 0:
-        logger.info(f"File {outfile_mon} created successfully.")
-    else:
-        logger.warning(f"File {outfile_mon} was not created properly.")
+    if not os.path.exists(outfile_mon) or os.path.getsize(outfile_mon) == 0:
+        logger.warning(f"File {outfile_mon} was not created successfully.")
+        sys.exit(1)
 
     return outfile_mon
