@@ -35,10 +35,10 @@ done
 
 # update daily 2D variables calculated from hourly files at DKRZ
 # variable_list=(tasmax, tasmin)
-python process_2D_maxmin_from_dkrz_hourly_files.py -c configs/Config_era5_2t_minmax.yaml
+python process_2D_maxmin_from_dkrz_hourly_files.py -c configs/Config_era5_2t_minmax_dkrz.yaml
 
-#variable_list=(sfcWind)
-python process_2D_sfcWind_from_dkrz_hourly_files.py -c configs/Config_era5_sfcWind.yaml
+# variable_list=(sfcWind)
+python process_2D_sfcWind_from_dkrz_hourly_files.py -c configs/Config_era5_1day_sfcWind_dkrz.yaml
 
 # update daily 3D variables available from DKRZ
 variable_list=(q r t u v)
