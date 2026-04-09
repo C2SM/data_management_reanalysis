@@ -59,7 +59,7 @@ def calc_minmax(infile, minmax_file, dayagg, year, month, day_str):
         cmd = [
             "cdo",
             f"{dayagg}",
-            f"{infile}.nc",
+            f"{infile}",
             f"{minmax_file}{day_str}.nc"
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -76,7 +76,7 @@ def calc_minmax(infile, minmax_file, dayagg, year, month, day_str):
         )
     else:
         # clean up 1-hr data
-        os.system(f"rm {infile}.nc")
+        os.system(f"rm {infile}")
 
     return
 
@@ -168,6 +168,9 @@ def main():
             dayagg = "daymax"
         elif "min" in varout:
             dayagg = "daymin"
+        era5_info["cmip_name"] = varout
+        logger.info(f'cmip_name: {era5_info["cmip_name"]},')
+
 
         for year in range(startyr, endyr + 1):
             logger.info(f"Processing year {year}.")
@@ -215,21 +218,21 @@ def main():
                 # concatenate daily files
                 daily_file = f"{work_path}/{varout}_day_era5_{year}{month}.nc"
                 try:
-                    cdo.mergetime(options="-b 64", input=f"{minmax_file}*.nc", output=f"{daily_file}")
+                    cdo.mergetime(options="-b 64", input=f"{minmax_file}*", output=f"{daily_file}")
                 except RuntimeError as e:
                     logger.error(f"CDO execution failed!")
                     logger.error(f"Error details: {e}")
                     sys.exit(1)
 
                 outfile_name = convert_era5_to_cmip(
-                    daily_file, varout, outfile, work_path, era5_info, dataname,
-                    year, month, config["chunking"]["lat_chk"], config["chunking"]["lon_chk"]
+                    daily_file, store, proc_archive, era5_info, dataname, year, month,
+                    config["chunking"]["time_chk"], config["chunking"]["lat_chk"], config["chunking"]["lon_chk"]
                 )
 
                 logger.info(f"File {outfile_name} written.")
 
                 # calculate monthly mean
-                outfile_mon = calc_mon_mean(proc_path, outfile_name, varout, year, month)
+                outfile_mon = calc_mon_mean(proc_path, outfile_name)
                 logger.info(f"File {outfile_mon} written.")
 
         # -------------------------------------------------
