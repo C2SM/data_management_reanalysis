@@ -175,6 +175,14 @@ def main():
     logger.info(f'unit: {era5_info2["unit"]},')
     logger.info(f'parameterid: {era5_info2["param"]},')
 
+    era5_info = era5_info1.copy()
+    era5_info["short_name"] = varout
+    era5_info["long_name"] = long_name
+    era5_info["unit"] = unit
+    era5_info["cmip_name"] = varout
+    era5_info["cmip_unit"] = unit
+    logger.info(f'varout cmip_name: {era5_info["cmip_name"]}')
+
     for year in range(startyr, endyr + 1):
         logger.info(f"Processing year {year}.")
 
@@ -240,7 +248,9 @@ def main():
         # Clean up
         # -------------------------------------------------
         os.system(f"rm {work_path}/{varout}_*")
-        os.system(f"rm {work_path}/{var}_*")
+        os.system(f"rm {work_path}/tmp_*")
+        os.system(f"rm {work_path}/tmp2_{var1}_*")
+        os.system(f"rm {work_path}/tmp2_{var2}_*")
         os.system(f"rm {grib_path}/*")
 
 
