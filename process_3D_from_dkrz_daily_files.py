@@ -51,10 +51,17 @@ def convert_cc(cc_outfile, workdir, era5_info, year, month):
         logger.error(f"CDO execution failed!")
         logger.error(f"Error details: {e}")
 
-    os.system(f'rm {workdir}/{era5_info["short_name"]}_era5_{year}{month}.nc')
-    os.system(
-        f'ncatted -a units,{era5_info["short_name"]},m,c,"{era5_info["cmip_unit"]}" {workdir}/{era5_info["short_name"]}_era5_{year}{month}_mulc.nc {cc_outfile}'
-    )
+    # remove incoming file to be overwritten with unit conversion file
+    try:
+        cmd = [
+            "rm",
+            f"{cc_outfile}"
+        ]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Command failed with return code {e.returncode}")
+        logger.error(f"Standard output:\n{e.stdout}")
+
     try:
         cmd = [
             "ncatted",
@@ -70,6 +77,22 @@ def convert_cc(cc_outfile, workdir, era5_info, year, month):
 
     return cc_outfile
 
+
+def convert_q(q_outfile, workdir, era5_info, year, month):
+
+    try:
+        cmd = [
+            "ncatted",
+            "-a", f'units,{era5_info["short_name"]},m,c,"{era5_info["cmip_unit"]}"',
+            f"{q_outfile}"
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with return code {e.returncode}")
+        print(f"Error message: {e.stderr}")
+        sys.exit(1)
+
+    return q_outfile
 
 # -------------------------------------------------
 
@@ -189,9 +212,16 @@ def main():
                     logger.info(
                         f'Unit for cc needs to be changed from {era5_info["unit"]} to {era5_info["cmip_unit"]}.'
                     )
-
                     tmp_outfile = convert_cc(
-                        tmp_outfile, work_path, era5_info, dataname, year, month
+                        tmp_outfile, work_path, era5_info, year, month
+                    )
+                elif var == "q":
+                    logger.info(
+                        f'Unit for q needs to be changed from {era5_info["unit"]} to {era5_info["cmip_unit"]}.'
+                        f'Units are equivalent, but unit needs to be changed to be compliant with CMIP standards.'
+                    )
+                    tmp_outfile = convert_q(
+                        tmp_outfile, work_path, era5_info, year, month
                     )
                 else:
                     logger.error(
