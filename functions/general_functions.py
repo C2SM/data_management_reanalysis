@@ -179,6 +179,8 @@ def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, dataname, year, 
     try:
         cmd = [
             "grib_to_netcdf",
+            "-u",
+            "time",
             "-o",
             f"{tmpfile}.nc",
             f"{tmpfile}.grib"
