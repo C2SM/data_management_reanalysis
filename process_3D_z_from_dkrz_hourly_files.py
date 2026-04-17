@@ -50,8 +50,9 @@ def convert_z(tmp_outfile, workdir, era5_info, year, month, day_str):
     # https://confluence.ecmwf.int/display/CKB/ERA5%3A+compute+pressure+and+geopotential+on+model+levels%2C+geopotential+height+and+geometric+height#ERA5:computepressureandgeopotentialonmodellevels,geopotentialheightandgeometricheight-Geopotentialheight
     # Earth's gravitational acceleration [m/s2]
     const = 9.80665
+    tmp2_outfile = f"{workdir}/{era5_info['short_name']}_era5_{year}{month}{day_str}_divc.nc"
     try:
-        cdo.divc(const, tmp_outfile, f'{workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}_divc.nc')
+        cdo.divc(const, input=tmp_outfile, output=tmp2_outfile)
     except RuntimeError as e:
         logger.error(f"CDO execution failed!")
         logger.error(f"Error details: {e}")
@@ -60,9 +61,28 @@ def convert_z(tmp_outfile, workdir, era5_info, year, month, day_str):
     #os.system(
     #    f'ncatted -a units,{era5_info["short_name"]},m,c,"{era5_info["cmip_unit"]}" {workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}_divc.nc {tmp_outfile}'
     #)
+    if not os.path.isfile(f"{tmp2_outfile}") or os.path.getsize(f"{tmp2_outfile}") == 0:
+        logger.warning(
+            f"{tmp2_outfile} was not created or is empty!"
+        )
+    else:
+        logger.info(
+            f"{tmp2_outfile} was processed successfully!"
+        )
     try:
+        cmd = [
+            "ncatted",
+            "-a",
+            "units",
+            era5_info["short_name"],
+            "m",
+            "c",
+            era5_info["cmip_unit"],
+            f"{tmp2_outfile}",
+            f"{tmp_outfile}"
+        ]
         subprocess.run(
-            f'ncatted -a units,{era5_info["short_name"]},m,c,"{era5_info["cmip_unit"]}" {workdir}/{era5_info["short_name"]}_era5_{year}{month}{day_str}_divc.nc {tmp_outfile}',
+            cmd,
             check=True,
             capture_output=True,
             text=True,
@@ -72,6 +92,15 @@ def convert_z(tmp_outfile, workdir, era5_info, year, month, day_str):
         logger.error(f"Standard output:\n{e.stdout}")
         logger.error(f"Standard error:\n{e.stderr}")
         sys.exit(1)
+
+    if not os.path.isfile(f"{tmp_outfile}") or os.path.getsize(f"{tmp_outfile}") == 0:
+        logger.warning(
+            f"{tmp_outfile} was not created or is empty!"
+        )
+    else:
+        logger.info(
+            f"{tmp_outfile} was processed successfully!"
+        )
 
     return tmp_outfile
 
@@ -179,7 +208,6 @@ def main():
         else:
             download_success = f"Warning, download from store {store} not implemented."
         logger.info(download_success)
-        print(download_file)
 
         proc_archive = f'{proc_path}/{era5_info["cmip_name"]}/day/native/{year}'
         os.makedirs(proc_archive, exist_ok=True)
@@ -188,13 +216,12 @@ def main():
             outfile = (
                 f'{proc_archive}/{era5_info["cmip_name"]}_day_era5_{year}{month}.nc'
             )
-            print(month)
+
             num_days = calendar.monthrange(year, int(month))[1]
             days = [*range(1, num_days + 1)]
-            print(days)
+
             for day in days:
                 day_str = f"{day:02d}"
-                print(day_str)
 
                 grib_file = f'{grib_path}/E5pl00_{freq}_{year}-{month}-{day_str}_{era5_info["param"]}.grb'
 
