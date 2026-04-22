@@ -239,7 +239,7 @@ def main():
 
         # clean up the work directory for the year
         os.system(f"rm {work_path}/{var}_{year}-*_p{num_level}.nc")
-        os.system(f"rm {grib_path}/*.grb")
+    os.system(f"rm {grib_path}/*.grb")
 
 if __name__ == "__main__":
     main()
