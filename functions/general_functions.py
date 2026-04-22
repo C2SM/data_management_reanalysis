@@ -611,6 +611,12 @@ def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, dataname, 
 
     # read cmip standard_name and long_name from cmip6-cmor-tables
     standard_name, long_name = read_cmip_info(era5_info["cmip_name"])
+    # user defined long_name if cmip long_name is empty
+    if not long_name:
+        long_name = era5_info["long_name"]
+    if not standard_name:
+        standard_name = era5_info["long_name"]
+
     # append standard_name and long_name attributes to variable
     try:
         cmd = [
@@ -692,6 +698,12 @@ def convert_era5_to_cmip_plev(
 
     # read cmip standard_name and long_name from cmip6-cmor-tables
     standard_name, long_name = read_cmip_info(era5_info["cmip_name"])
+    # user defined long_name if cmip long_name is empty
+    if not long_name:
+        long_name = era5_info["long_name"]
+    if not standard_name:
+        standard_name = era5_info["long_name"]
+
     # append standard_name and long_name attributes to variable
     try:
         cmd = [
