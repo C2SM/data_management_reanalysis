@@ -149,4 +149,12 @@ def read_cmip_info(cmip_name):
             return data["variable_entry"][cmip_name]["standard_name"], data["variable_entry"][cmip_name]["long_name"]
         except KeyError:
             logger.error(f"CMIP variable {cmip_name} not found in CMIP6_Amon table.")
-        return None, None
+            try:
+                url = 'https://raw.githubusercontent.com/PCMDI/cmip6-cmor-tables/refs/heads/main/Tables/CMIP6_Omon.json'
+                resp = requests.get(url)
+                data = json.loads(resp.text)
+                return data["variable_entry"][cmip_name]["standard_name"], data["variable_entry"][cmip_name]["long_name"]
+            except KeyError:
+                logger.error(f"CMIP variable {cmip_name} not found in CMIP6_Omon table.")
+                # variable not found in CMIP6 tables, use VariableNameInCDS as standard name and long name
+                return None, None
