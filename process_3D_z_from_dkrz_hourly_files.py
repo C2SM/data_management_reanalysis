@@ -73,19 +73,16 @@ def convert_z(tmp_outfile, workdir, era5_info, year, month, day_str):
         cmd = [
             "ncatted",
             "-a",
-            "units",
-            era5_info["short_name"],
-            "m",
-            "c",
-            era5_info["cmip_unit"],
+            f"units,{era5_info['short_name']},m,c,{era5_info['cmip_unit']}",
             f"{tmp2_outfile}",
             f"{tmp_outfile}"
         ]
-        subprocess.run(
+        print(cmd)
+        result = subprocess.run(
             cmd,
             check=True,
             capture_output=True,
-            text=True,
+            text=True
         )
     except subprocess.CalledProcessError as e:
         logger.error(f"Command failed with return code {e.returncode}")
