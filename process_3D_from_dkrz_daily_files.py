@@ -14,34 +14,12 @@ from cdo import Cdo
 
 import xarray as xr
 
-from functions.file_util import read_config, read_era5_info
+from functions.file_util import parse_args, read_era5_info
 from functions.read_config import read_yaml_config
 from functions.general_functions import *
 
 cdo = Cdo()
 
-# -------------------------------------------------
-# Create a simple logger
-# -------------------------------------------------
-
-# Define logfile and logger
-seconds = time.time()
-local_time = time.localtime(seconds)
-# Name the logfile after first of all inputs
-LOG_FILENAME = (
-    f"logfiles/logging_ERA5_dkrz_pl_daily"
-    f"_{local_time.tm_year}{local_time.tm_mon}"
-    f"{local_time.tm_mday}{local_time.tm_hour}{local_time.tm_min}"
-    f".out"
-)
-
-logging.basicConfig(
-    filename=LOG_FILENAME,
-    filemode="w",
-    format="%(asctime)s | %(levelname)s : %(message)s",
-    level=logging.INFO,
-)
-logger = logging.getLogger(__name__)
 
 
 def convert_cc(cc_outfile, workdir, era5_info, year, month):
@@ -101,25 +79,33 @@ def main():
     # -------------------------------------------------
     # Parse command line input
     # -------------------------------------------------
-    parser = argparse.ArgumentParser(
-        description="Download ERA5 data and process to CMIP like"
-    )
-    parser.add_argument(
-        "-c",
-        "--configname",
-        help="Name of the config yaml file",
-        required=True,
-    )
-    parser.add_argument(
-        "-v",
-        "--varname",
-        help="Name of the variable to be processed",
-        required=True,
-    )
-    args = parser.parse_args()
+    args = parse_args()
 
     configname = args.configname
     var = args.varname
+
+    # -------------------------------------------------
+    # Define logfile and logger
+    # -------------------------------------------------
+    seconds = time.time()
+    local_time = time.localtime(seconds)
+    # Name the logfile after date, configname, var
+    LOG_FILENAME = (
+        f"logfiles/logging_ERA5_dkrz_pl_daily"
+        f"_{local_time.tm_year}{local_time.tm_mon}"
+        f"{local_time.tm_mday}{local_time.tm_hour}{local_time.tm_min}_{var}"
+        f".out"
+    )
+
+    logging.basicConfig(
+        filename=LOG_FILENAME,
+        filemode="w",
+        format="%(asctime)s | %(levelname)s : %(message)s",
+        level=logging.INFO,
+    )
+    logger = logging.getLogger(__name__)
+
+
     logger.info(f"Config name is: {configname}")
     logger.info(f"Variable name is: {var}")
 
@@ -161,7 +147,7 @@ def main():
         all_months = True
     print(f"Months to be processed: {months}")
 
-    # overwrite files, download from CDS if already exists and reprocess
+    # overwrite files? if True reprocess even if already existing, if False skip processing if file already exists
     overwrite = config['flags']['overwrite']
 
     # -------------------------------------------------
@@ -201,43 +187,49 @@ def main():
             outfile = (
                 f'{proc_archive}/{era5_info["cmip_name"]}_day_{dataname}_{year}{month}.nc'
             )
+            if os.path.isfile(outfile) and not overwrite:
+                logger.info(
+                    f"File {outfile} already exists and overwrite is set to False. Skipping processing for this file."
+                )
+                continue
+            else:
+                tmp_outfile = convert_netcdf_add_era5_info(
+                    grib_file, work_path, era5_info, dataname, year, month
+                )
 
-            tmp_outfile = convert_netcdf_add_era5_info(
-                grib_file, work_path, era5_info, dataname, year, month
-            )
+                # check if unit needs to be changed from era5 variable to cmip variable
+                if era5_info["unit"] != era5_info["cmip_unit"]:
+                    if var == "cc":
+                        logger.info(
+                            f'Unit for cc needs to be changed from {era5_info["unit"]} to {era5_info["cmip_unit"]}.'
+                        )
+                        tmp_outfile = convert_cc(
+                            tmp_outfile, work_path, era5_info, year, month
+                        )
+                    elif var == "q":
+                        logger.info(
+                            f'Unit for q needs to be changed from {era5_info["unit"]} to {era5_info["cmip_unit"]}.'
+                            f'Units are equivalent, but unit needs to be changed to be compliant with CMIP standards.'
+                        )
+                        tmp_outfile = convert_q(
+                            tmp_outfile, work_path, era5_info, year, month
+                        )
+                    else:
+                        logger.error(
+                            f"Conversion of unit for variable {var} is not implemented!"
+                        )
+                        sys.exit(1)
 
-            # check if unit needs to be changed from era5 variable to cmip variable
-            if era5_info["unit"] != era5_info["cmip_unit"]:
-                if var == "cc":
-                    logger.info(
-                        f'Unit for cc needs to be changed from {era5_info["unit"]} to {era5_info["cmip_unit"]}.'
-                    )
-                    tmp_outfile = convert_cc(
-                        tmp_outfile, work_path, era5_info, year, month
-                    )
-                elif var == "q":
-                    logger.info(
-                        f'Unit for q needs to be changed from {era5_info["unit"]} to {era5_info["cmip_unit"]}.'
-                        f'Units are equivalent, but unit needs to be changed to be compliant with CMIP standards.'
-                    )
-                    tmp_outfile = convert_q(
-                        tmp_outfile, work_path, era5_info, year, month
-                    )
-                else:
-                    logger.error(
-                        f"Conversion of unit for variable {var} is not implemented!"
-                    )
-                    sys.exit(1)
+                outfile_name = convert_era5_to_cmip_plev(
+                    tmp_outfile, outfile, work_path, era5_info, year, month, config['chunking']['lat_chk'], config['chunking']['lon_chk']
+                )
 
-            outfile_name = convert_era5_to_cmip_plev(
-                tmp_outfile, outfile, work_path, era5_info, year, month, config['chunking']['lat_chk'], config['chunking']['lon_chk']
-            )
+                logger.info(f"File {outfile_name} written.")
 
-            logger.info(f"File {outfile_name} written.")
 
-            # calculate monthly mean
-            outfile_mon = calc_mon_mean(proc_archive, outfile_name)
-            logger.info(f"File {outfile_mon} written.")
+                # calculate monthly mean
+                outfile_mon = calc_mon_mean(proc_archive, outfile_name)
+                logger.info(f"File {outfile_mon} written.")
 
         # -------------------------------------------------
         # Clean up
