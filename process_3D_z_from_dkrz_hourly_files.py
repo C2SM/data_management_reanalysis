@@ -15,34 +15,12 @@ from datetime import datetime
 import xarray as xr
 from cdo import Cdo
 
-from functions.file_util import read_config, read_era5_info
+from functions.file_util import parse_args, read_era5_info
 from functions.read_config import read_yaml_config
 from functions.general_functions import *
 
 cdo = Cdo()
 
-# -------------------------------------------------
-# Create a simple logger
-# -------------------------------------------------
-
-# Define logfile and logger
-seconds = time.time()
-local_time = time.localtime(seconds)
-# Name the logfile after first of all inputs
-LOG_FILENAME = (
-    f"logfiles/logging_ERA5_dkrz_pl_z_hourly_to_daily"
-    f"_{local_time.tm_year}{local_time.tm_mon}"
-    f"{local_time.tm_mday}{local_time.tm_hour}{local_time.tm_min}"
-    f".out"
-)
-
-logging.basicConfig(
-    filename=LOG_FILENAME,
-    filemode="w",
-    format="%(asctime)s | %(levelname)s : %(message)s",
-    level=logging.INFO,
-)
-logger = logging.getLogger(__name__)
 
 
 
@@ -73,11 +51,10 @@ def convert_z(tmp_outfile, workdir, era5_info, year, month, day_str):
         cmd = [
             "ncatted",
             "-a",
-            f"units,{era5_info['short_name']},m,c,{era5_info['cmip_unit']}",
+            f'units,{era5_info['short_name']},m,c,"{era5_info['cmip_unit']}"',
             f"{tmp2_outfile}",
             f"{tmp_outfile}"
         ]
-        print(cmd)
         result = subprocess.run(
             cmd,
             check=True,
@@ -94,12 +71,13 @@ def convert_z(tmp_outfile, workdir, era5_info, year, month, day_str):
         logger.warning(
             f"{tmp_outfile} was not created or is empty!"
         )
+        return None
     else:
         logger.info(
             f"{tmp_outfile} was processed successfully!"
         )
 
-    return tmp_outfile
+        return tmp_outfile
 
 
 # -------------------------------------------------
@@ -109,26 +87,36 @@ def main():
     # -------------------------------------------------
     # Parse command line input
     # -------------------------------------------------
-    parser = argparse.ArgumentParser(
-        description="Download ERA5 data and process to CMIP like"
-    )
-    parser.add_argument(
-        "-c",
-        "--configname",
-        help="Name of the config yaml file",
-        required=True,
-    )
-    parser.add_argument(
-        "-v",
-        "--varname",
-        help="Name of the variable to be processed",
-        required=True,
-    )
-    args = parser.parse_args()
+    args = parse_args()
 
     configname = args.configname
-    logger.info(f"Config name is: {configname}")
+    # variable to be processed
+    var = args.varname
 
+    # -------------------------------------------------
+    # Define logfile and logger
+    # -------------------------------------------------
+    seconds = time.time()
+    local_time = time.localtime(seconds)
+    # Name the logfile after first of all inputs
+    LOG_FILENAME = (
+        f"logfiles/logging_ERA5_dkrz_pl_z_hourly_to_daily_"
+        f"_{local_time.tm_year}{local_time.tm_mon}"
+        f"{local_time.tm_mday}{local_time.tm_hour}{local_time.tm_min}_{var}"
+        f".out"
+    )
+
+    logging.basicConfig(
+        filename=LOG_FILENAME,
+        filemode="w",
+        format="%(asctime)s | %(levelname)s : %(message)s",
+        level=logging.INFO,
+    )
+    logger = logging.getLogger(__name__)
+
+
+    logger.info(f"Config name is: {configname}")
+    logger.info(f"Variable name is: {var}")
     # -------------------------------------------------
     # Read config
     # -------------------------------------------------
@@ -138,12 +126,9 @@ def main():
     store = config['dataset']['store']
     dataname = config['dataset']['name'].lower()
 
-    # variable to be processed
-    var = args.varname
     freq = config['variables']['freq']
     family = config['variables']['family']
     level = config['variables']['level']
-    print(f"Variable to be processed: {var}")
 
     # configured paths
     origin = config['paths']['origin']
@@ -195,6 +180,10 @@ def main():
     # read cmip standard_name and long_name from cmip6-cmor-tables
     standard_name, long_name = read_cmip_info(era5_info["cmip_name"])
 
+
+    # -------------------------------------------------
+    # Process data year by year and month by month
+    # -------------------------------------------------
     for year in range(startyr, endyr + 1):
         logger.info(f"Processing year {year}.")
 
@@ -213,80 +202,98 @@ def main():
             outfile = (
                 f'{proc_archive}/{era5_info["cmip_name"]}_day_era5_{year}{month}.nc'
             )
-
-            num_days = calendar.monthrange(year, int(month))[1]
-            days = [*range(1, num_days + 1)]
-
-            for day in days:
-                day_str = f"{day:02d}"
-
-                grib_file = f'{grib_path}/E5pl00_{freq}_{year}-{month}-{day_str}_{era5_info["param"]}.grb'
-
-                tmp_outfile = convert_netcdf_add_era5_info(
-                    grib_file, work_path, era5_info, year, month, day_str
+            if os.path.isfile(outfile) and not overwrite:
+                logger.info(
+                    f"{outfile} already exists and overwrite is set to False. Skipping processing for month {month}."
                 )
+                continue
+            else:
+                num_days = calendar.monthrange(year, int(month))[1]
+                days = [*range(1, num_days + 1)]
 
-                # check if unit needs to be changed from era5 variable to cmip variable
-                if era5_info["unit"] != era5_info["cmip_unit"]:
-                    if var == "z":
-                        logger.info(
-                            f'Unit for z needs to be changed from {era5_info["unit"]} to {era5_info["cmip_unit"]}.'
-                        )
-                        tmp_outfile = convert_z(
-                            tmp_outfile,
-                            work_path,
-                            era5_info,
-                            year,
-                            month,
-                            day_str,
-                        )
-                    else:
-                        logger.error(
-                            f"Conversion of unit for variable {var} is not implemented!"
-                        )
+                for day in days:
+                    day_str = f"{day:02d}"
+
+                    grib_file = f'{grib_path}/E5pl00_{freq}_{year}-{month}-{day_str}_{era5_info["param"]}.grb'
+
+                    tmp_outfile = convert_netcdf_add_era5_info(
+                        grib_file, work_path, era5_info, year, month, day_str
+                    )
+
+                    # check if unit needs to be changed from era5 variable to cmip variable
+                    if era5_info["unit"] != era5_info["cmip_unit"]:
+                        if var == "z":
+                            logger.info(
+                                f'Unit for z needs to be changed from {era5_info["unit"]} to {era5_info["cmip_unit"]}.'
+                            )
+                            tmp_outfile = convert_z(
+                                tmp_outfile,
+                                work_path,
+                                era5_info,
+                                year,
+                                month,
+                                day_str,
+                            )
+                        else:
+                            logger.error(
+                                f"Conversion of unit for variable {var} is not implemented!"
+                            )
+                            sys.exit(1)
+
+                    # calculate daily means
+                    outfile_daymean = f'{work_path}/{era5_info["short_name"]}_daymean_era5_{year}{month}{day_str}.nc'
+                    try:
+                        cdo.daymean(input=tmp_outfile, output=outfile_daymean)
+                    except RuntimeError as e:
+                        logger.error(f"CDO execution failed!")
+                        logger.error(f"Error details: {e}")
                         sys.exit(1)
 
-                # calculate daily means
-                outfile_daymean = f'{work_path}/{era5_info["short_name"]}_daymean_era5_{year}{month}{day_str}.nc'
+                    if not os.path.isfile(outfile_daymean) or os.path.getsize(outfile_daymean) == 0:
+                        logger.warning(
+                            f"{outfile_daymean} was not created or is empty!"
+                        )
+                    else:
+                        logger.info(
+                            f"{outfile_daymean} was processed successfully!"
+                        )
+                        # clean up 1-hr data
+                        os.system(f"rm {tmp_outfile}")
+
+
+                # concatenate daily files
+                logger.info(f"Concatenating daily files for month {month} to create daily file for the month.")
+                daily_file = f"{work_path}/{var}_day_era5_{year}{month}.nc"
                 try:
-                    cdo.daymean(input=tmp_outfile, output=outfile_daymean)
+                    cdo.mergetime(input=f'{work_path}/{era5_info["short_name"]}_daymean_era5_{year}{month}*.nc', output=daily_file)
                 except RuntimeError as e:
                     logger.error(f"CDO execution failed!")
                     logger.error(f"Error details: {e}")
                     sys.exit(1)
-
-                if not os.path.isfile(outfile_daymean) or os.path.getsize(outfile_daymean) == 0:
+                if not os.path.isfile(daily_file) or os.path.getsize(daily_file) == 0:
                     logger.warning(
-                        f"{outfile_daymean} was not created or is empty!"
+                        f"{daily_file} was not created or is empty!"
                     )
                 else:
                     logger.info(
-                        f"{outfile_daymean} was processed successfully!"
+                        f"{daily_file} was processed successfully!"
                     )
-                    # clean up 1-hr data
-                    os.system(f"rm {tmp_outfile}")
+
+                outfile_name = convert_era5_to_cmip_plev(
+                    daily_file, outfile, work_path, era5_info, year, month, lat_chk, lon_chk
+                )
+
+                if not os.path.isfile(outfile_name) or os.path.getsize(outfile_name) == 0:
+                    logger.warning(
+                        f"{outfile_name} was not created or is empty!"
+                    )
+                else:
+                    logger.info(f"File {outfile_name} written successfully.")
 
 
-            # concatenate daily files
-            daily_file = f"{work_path}/{var}_day_era5_{year}{month}.nc"
-            try:
-                cdo.mergetime(f'{work_path}/{var}_daymean_era5_{year}{month}*.nc', daily_file)
-            except RuntimeError as e:
-                logger.error(f"CDO execution failed!")
-                logger.error(f"Error details: {e}")
-                sys.exit(1)
-
-
-            outfile_name = convert_era5_to_cmip_plev(
-                daily_file, outfile, work_path, era5_info, year, month, lat_chk, lon_chk
-            )
-
-            logger.info(f"File {outfile_name} written.")
-
-
-            # calculate monthly mean
-            outfile_mon = calc_mon_mean(proc_archive, outfile_name)
-            logger.info(f"File {outfile_mon} written.")
+                # calculate monthly mean
+                outfile_mon = calc_mon_mean(proc_archive, outfile_name)
+                logger.info(f"File {outfile_mon} written.")
 
         # -------------------------------------------------
         # Clean up
