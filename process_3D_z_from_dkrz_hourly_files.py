@@ -22,6 +22,27 @@ from functions.general_functions import *
 cdo = Cdo()
 
 
+# -------------------------------------------------
+# Define logfile and logger
+# -------------------------------------------------
+seconds = time.time()
+local_time = time.localtime(seconds)
+# Name the logfile after first of all inputs
+LOG_FILENAME = (
+    f"logfiles/logging_ERA5_dkrz_pl_z_hourly_to_daily_"
+    f"_{local_time.tm_year}{local_time.tm_mon}"
+    f"{local_time.tm_mday}{local_time.tm_hour}{local_time.tm_min}"
+    f".out"
+)
+
+logging.basicConfig(
+    filename=LOG_FILENAME,
+    filemode="w",
+    format="%(asctime)s | %(levelname)s : %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
+
 
 
 def convert_z(tmp_outfile, workdir, era5_info, year, month, day_str):
@@ -92,28 +113,6 @@ def main():
     configname = args.configname
     # variable to be processed
     var = args.varname
-
-    # -------------------------------------------------
-    # Define logfile and logger
-    # -------------------------------------------------
-    seconds = time.time()
-    local_time = time.localtime(seconds)
-    # Name the logfile after first of all inputs
-    LOG_FILENAME = (
-        f"logfiles/logging_ERA5_dkrz_pl_z_hourly_to_daily_"
-        f"_{local_time.tm_year}{local_time.tm_mon}"
-        f"{local_time.tm_mday}{local_time.tm_hour}{local_time.tm_min}_{var}"
-        f".out"
-    )
-
-    logging.basicConfig(
-        filename=LOG_FILENAME,
-        filemode="w",
-        format="%(asctime)s | %(levelname)s : %(message)s",
-        level=logging.INFO,
-    )
-    logger = logging.getLogger(__name__)
-
 
     logger.info(f"Config name is: {configname}")
     logger.info(f"Variable name is: {var}")
