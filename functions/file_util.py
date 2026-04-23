@@ -37,10 +37,24 @@ def read_config(configfolder, configfile):
 
     return Config(**config)
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Download ERA5 data and process to CMIP like"
+    )
+    parser.add_argument(
+        "-c",
+        "--configname",
+        help="Name of the config yaml file",
+        required=True,
+    )
+    parser.add_argument(
+        "-v",
+        "--varname",
+        help="Name of the variable to be processed",
+        required=True,
+    )
 
-# -------------------------------------------------
-# Read ERA5 info from JSON file
-# -------------------------------------------------
+    return parser.parse_args()
 
 
 def read_era5_info(vname):
@@ -85,7 +99,7 @@ def read_era5_info(vname):
     return era5_info
 
 # -------------------------------------------------
-# Read ERA5 info from JSON file
+# Read CERRA info from JSON file
 # -------------------------------------------------
 
 
