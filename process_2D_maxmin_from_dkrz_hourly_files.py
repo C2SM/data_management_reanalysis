@@ -6,7 +6,7 @@ Author: Ruth Lorenz (ruth.lorenz@c2sm.ethz.ch)
 Created: 08/12/2023
 Purpose: process ERA5 data downloaded from dkrz hourly files to daily max/min and
          convert to variable names and units as in cmip
-        env: cdsapi_10_2024
+        env: iacpy3_2025
 """
 
 # -------------------------------------------------
@@ -23,15 +23,13 @@ from datetime import datetime
 
 import xarray as xr
 
-from functions.file_util import read_config, read_era5_info
+from functions.file_util import read_era5_info
 from functions.read_config import read_yaml_config
 from functions.general_functions import *
 
 # -------------------------------------------------
-# Create a simple logger
-# -------------------------------------------------
-
 # Define logfile and logger
+# -------------------------------------------------
 seconds = time.time()
 local_time = time.localtime(seconds)
 # Name the logfile after first of all inputs
@@ -140,7 +138,7 @@ def main():
         months = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
         all_months = True
 
-    # overwrite files, download from CDS if already exists and reprocess
+    # overwrite files? if True reprocess even if already existing, if False skip processing if file already exists
     overwrite = config['flags']['overwrite']
 
     # -------------------------------------------------
@@ -198,42 +196,47 @@ def main():
                 outfile = (
                     f'{proc_archive}/{varout}_day_era5_{year}{month}.nc'
                 )
+                if os.path.isfile(outfile) and not overwrite:
+                    logger.info(
+                        f"File {outfile} already exists and overwrite is set to False. Skipping processing for this file."
+                    )
+                    continue
+                else:
+                    num_days = calendar.monthrange(year, int(month))[1]
+                    days = [*range(1, num_days + 1)]
 
-                num_days = calendar.monthrange(year, int(month))[1]
-                days = [*range(1, num_days + 1)]
+                    minmax_file = f'{work_path}/{var}_{dayagg}_era5_{year}{month}'
 
-                minmax_file = f'{work_path}/{var}_{dayagg}_era5_{year}{month}'
+                    for day in days:
+                        day_str = f"{day:02d}"
 
-                for day in days:
-                    day_str = f"{day:02d}"
+                        grib_file = f'{grib_path}/E5sf00_{freq}_{year}-{month}-{day_str}_{era5_info["param"]}.grb'
 
-                    grib_file = f'{grib_path}/E5sf00_{freq}_{year}-{month}-{day_str}_{era5_info["param"]}.grb'
+                        tmp_outfile = convert_netcdf_add_era5_info(
+                            grib_file, work_path, era5_info, dataname, year, month, day_str
+                        )
 
-                    tmp_outfile = convert_netcdf_add_era5_info(
-                        grib_file, work_path, era5_info, dataname, year, month, day_str
+                        calc_minmax(tmp_outfile, minmax_file, dayagg, year, month, day_str)
+
+                    # concatenate daily files
+                    daily_file = f"{work_path}/{varout}_day_era5_{year}{month}.nc"
+                    try:
+                        cdo.mergetime(options="-b 64", input=f"{minmax_file}*", output=f"{daily_file}")
+                    except RuntimeError as e:
+                        logger.error(f"CDO execution failed!")
+                        logger.error(f"Error details: {e}")
+                        sys.exit(1)
+
+                    outfile_name = convert_era5_to_cmip(
+                        daily_file, store, proc_archive, era5_info, dataname, year, month,
+                        config["chunking"]["time_chk"], config["chunking"]["lat_chk"], config["chunking"]["lon_chk"]
                     )
 
-                    calc_minmax(tmp_outfile, minmax_file, dayagg, year, month, day_str)
+                    logger.info(f"File {outfile_name} written.")
 
-                # concatenate daily files
-                daily_file = f"{work_path}/{varout}_day_era5_{year}{month}.nc"
-                try:
-                    cdo.mergetime(options="-b 64", input=f"{minmax_file}*", output=f"{daily_file}")
-                except RuntimeError as e:
-                    logger.error(f"CDO execution failed!")
-                    logger.error(f"Error details: {e}")
-                    sys.exit(1)
-
-                outfile_name = convert_era5_to_cmip(
-                    daily_file, store, proc_archive, era5_info, dataname, year, month,
-                    config["chunking"]["time_chk"], config["chunking"]["lat_chk"], config["chunking"]["lon_chk"]
-                )
-
-                logger.info(f"File {outfile_name} written.")
-
-                # calculate monthly mean
-                outfile_mon = calc_mon_mean(proc_path, outfile_name)
-                logger.info(f"File {outfile_mon} written.")
+                    # calculate monthly mean
+                    outfile_mon = calc_mon_mean(proc_path, outfile_name)
+                    logger.info(f"File {outfile_mon} written.")
 
         # -------------------------------------------------
         # Clean up
