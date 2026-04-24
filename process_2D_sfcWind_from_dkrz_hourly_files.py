@@ -197,7 +197,9 @@ def main():
             outfile = (
                 f'{proc_archive}/{varout}_day_era5_{year}{month}.nc'
             )
-
+            if os.path.isfile(outfile) and not overwrite:
+                logger.info(f"File {outfile} already exists and overwrite is set to False. Skipping processing of month {month}.")
+                continue
             num_days = calendar.monthrange(year, int(month))[1]
             days = [*range(1, num_days + 1)]
 
@@ -220,7 +222,6 @@ def main():
                 )
 
                 daily_wind = calc_wind_daily(tmp_outfile1, era5_info1, tmp_outfile2, era5_info2, wind_file, year, month, day_str)
-                print(daily_wind)
                 daily_list.append(daily_wind)
 
             # concatenate daily files
@@ -235,14 +236,24 @@ def main():
             logger.info("Data written to %s", daily_file)
 
             outfile_name = convert_era5_to_cmip(
-                daily_file, store, proc_archive, era5_info, dataname, year, month, config["chunking"]["time_chk"], config["chunking"]["lat_chk"], config["chunking"]["lon_chk"]
+                daily_file, outfile, store, era5_info,
+                config["chunking"]["time_chk"], config["chunking"]["lat_chk"], config["chunking"]["lon_chk"]
             )
+            assert outfile_name == outfile, f"Output file name {outfile_name} does not match expected file name {outfile}."
 
-            logger.info(f"File {outfile_name} written.")
+            if not os.path.isfile(outfile_name) or os.path.getsize(outfile_name) == 0:
+                logger.error(f"Output file {outfile_name} not created successfully.")
+                sys.exit(1)
+            else:
+                logger.info(f"File {outfile_name} written.")
 
             # calculate monthly mean
             outfile_mon = calc_mon_mean(proc_archive, outfile_name)
-            logger.info(f"File {outfile_mon} written.")
+            if not os.path.isfile(outfile_mon) or os.path.getsize(outfile_mon) == 0:
+                logger.error(f"Output file {outfile_mon} not created successfully.")
+                sys.exit(1)
+            else:
+                logger.info(f"File {outfile_mon} written successfully.")
 
         # -------------------------------------------------
         # Clean up
