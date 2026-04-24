@@ -167,6 +167,9 @@ def main():
     logger.info(f'cmipname: {era5_info["cmip_name"]},')
     logger.info(f'cmipunit: {era5_info["cmip_unit"]}.')
 
+    # -------------------------------------------------
+    # Process data year by year and month by month
+    # -------------------------------------------------
     for year in range(startyr, endyr + 1):
         logger.info(f"Processing year {year}.")
 
