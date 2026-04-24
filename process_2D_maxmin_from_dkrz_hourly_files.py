@@ -173,7 +173,6 @@ def main():
         for year in range(startyr, endyr + 1):
             logger.info(f"Processing year {year}.")
 
-            print(store)
             if store == 'dkrz':
                 download_file = download_data_dkrz(
                     freq=freq, era5_info=era5_info, origin=origin, iac_path=grib_path, year=year, months=months, all_months=all_months, family=family, level=level)
@@ -181,8 +180,6 @@ def main():
             else:
                 download_success = f"Warning, download from store {store} not implemented."
             logger.info(download_success)
-            print(download_file)
-
 
             proc_archive = f'{proc_path}/{varout}/day/native/{year}'
             os.makedirs(proc_archive, exist_ok=True)
@@ -228,15 +225,23 @@ def main():
                         sys.exit(1)
 
                     outfile_name = convert_era5_to_cmip(
-                        daily_file, store, proc_archive, era5_info, dataname, year, month,
+                        daily_file, outfile, store, era5_info,
                         config["chunking"]["time_chk"], config["chunking"]["lat_chk"], config["chunking"]["lon_chk"]
                     )
-
-                    logger.info(f"File {outfile_name} written.")
+                    assert outfile_name == outfile, f"Output file name {outfile_name} does not match expected file name {outfile}."
+                    if not os.path.isfile(outfile_name) or os.path.getsize(outfile_name) == 0:
+                        logger.error(f"Output file {outfile_name} not created successfully.")
+                        sys.exit(1)
+                    else:
+                        logger.info(f"File {outfile_name} written.")
 
                     # calculate monthly mean
                     outfile_mon = calc_mon_mean(proc_path, outfile_name)
-                    logger.info(f"File {outfile_mon} written.")
+                    if not os.path.isfile(outfile_mon) or os.path.getsize(outfile_mon) == 0:
+                        logger.error(f"Output file {outfile_mon} not created successfully.")
+                        sys.exit(1)
+                    else:
+                        logger.info(f"File {outfile_mon} written successfully.")
 
         # -------------------------------------------------
         # Clean up
