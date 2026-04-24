@@ -226,13 +226,20 @@ def main():
                 outfile_name = convert_era5_to_cmip_plev(
                     tmp_outfile, outfile, work_path, era5_info, year, month, config['chunking']['lat_chk'], config['chunking']['lon_chk']
                 )
-
-                logger.info(f"File {outfile_name} written.")
+                if not os.path.isfile(outfile_name) or os.path.getsize(outfile_name) == 0:
+                    logger.error(f"Output file {outfile_name} was not created successfully.")
+                    sys.exit(1)
+                else:
+                    logger.info(f"File {outfile_name} written successfully.")
 
 
                 # calculate monthly mean
                 outfile_mon = calc_mon_mean(proc_archive, outfile_name)
-                logger.info(f"File {outfile_mon} written.")
+                if not os.path.isfile(outfile_mon) or os.path.getsize(outfile_mon) == 0:
+                    logger.error(f"Output file {outfile_mon} not created successfully.")
+                    sys.exit(1)
+                else:
+                    logger.info(f"File {outfile_mon} written.")
 
         # -------------------------------------------------
         # Clean up
