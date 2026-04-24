@@ -22,64 +22,44 @@ from datetime import datetime
 from pathlib import Path
 import cdsapi
 import xarray as xr
-from functions.file_util import read_era5_info
+from functions.file_util import parse_args, read_era5_info
 from functions.read_config import read_yaml_config
 from functions.general_functions import *
-
-# -------------------------------------------------
-# Create a simple logger
-# -------------------------------------------------
-
-# Define logfile and logger
-seconds = time.time()
-local_time = time.localtime(seconds)
-# Name the logfile after first of all inputs
-LOG_FILENAME = (
-    f"logfiles/logging_ERA5_dkrz_cds_daily"
-    f"_{local_time.tm_year}{local_time.tm_mon}"
-    f"{local_time.tm_mday}{local_time.tm_hour}{local_time.tm_min}"
-    f".out"
-)
-
-logging.basicConfig(
-    filename=LOG_FILENAME,
-    filemode="w",
-    format="%(asctime)s | %(levelname)s : %(message)s",
-    level=logging.INFO,
-)
-logger = logging.getLogger(__name__)
-
-
-# -------------------------------------------------
 
 
 def main():
     # -------------------------------------------------
     # Parse command line input
     # -------------------------------------------------
-    parser = argparse.ArgumentParser(
-        description="Download ERA5 data and process to CMIP like"
-    )
-    parser.add_argument(
-        "-v",
-        "--var",
-        help="ERA5 variable to be processed, e.g. 2t, tcc, tp, ssrd, strd, str, ssr",
-        required=True,
-    )
-    parser.add_argument(
-        "-c",
-        "--configname",
-        help="Name of the config yaml file",
-        required=True,
-    )
-    args = parser.parse_args()
+    args = parse_args()
 
     configname = args.configname
+    var = args.varname
+
+    # -------------------------------------------------
+    # Define logfile and logger
+    # -------------------------------------------------
+    seconds = time.time()
+    local_time = time.localtime(seconds)
+    # Name the logfile after time and variable
+    LOG_FILENAME = (
+        f"logfiles/logging_ERA5_dkrz_cds_daily"
+        f"_{local_time.tm_year}{local_time.tm_mon}"
+        f"{local_time.tm_mday}{local_time.tm_hour}{local_time.tm_min}_{var}"
+        f".out"
+    )
+
+    logging.basicConfig(
+        filename=LOG_FILENAME,
+        filemode="w",
+        format="%(asctime)s | %(levelname)s : %(message)s",
+        level=logging.INFO,
+    )
+    logger = logging.getLogger(__name__)
 
     # -------------------------------------------------
     # Read config
     # -------------------------------------------------
-
     config = read_yaml_config(configname)
     logger.info(f"Read configuration as {config}")
 
@@ -87,7 +67,6 @@ def main():
     dataname = config['dataset']['name'].lower()
 
     # variable to be processed
-    var = args.var
     freq = config['variables']['freq']
     family = config['variables']['family']
     level = config['variables']['level']
@@ -129,12 +108,14 @@ def main():
     logger.info(f"{config['dataset']['name']} variable info red from json file.")
     era5_info = read_era5_info(var)
 
-    logger.info(f"Copying variable {var}")
+    # -------------------------------------------------
     # download and process for all years in configuration
+    # -------------------------------------------------
+    logger.info(f"Copying variable {var}")
+
     for year in range(startyr, endyr + 1):
         logger.info(f"Processing year {year}, month(s) {months}.")
 
-        print(store)
         if store == 'dkrz':
             download_file = download_data_dkrz(
                 freq=freq, era5_info=era5_info, origin=origin, iac_path=grib_path, year=year, months=months, all_months=all_months, family=family, level=level)
@@ -154,8 +135,11 @@ def main():
         os.makedirs(proc_mon_archive, exist_ok=True)
 
         for month in months:
+            outfile = f'{proc_archive}/{era5_info["cmip_name"]}_day_{dataname}_{year}{month}.nc'
+            if os.path.isfile(outfile) and not overwrite:
+                logger.info(f"File {outfile} already exists and overwrite is set to False, skipping processing.")
+                continue
 
-            #grib_file = f'{grib_path}{family}{level}{typeid}_{freq}_{year}-{month}_{vparam}.grb'
             file = download_file.replace("MM", month)
             if file.endswith('.grb'):
                 logger.info(f"Converting grib file {file} to netcdf and adding ERA5 variable info.")
@@ -168,7 +152,7 @@ def main():
                     file, work_path, era5_info, dataname, year, month)
 
             # check if tmp_outfile was created successfully
-            if not os.path.isfile(f"{tmp_outfile}"):
+            if not os.path.isfile(tmp_outfile) or os.path.getsize(tmp_outfile) == 0:
                 logger.error(f"Output file {tmp_outfile} was not created successfully.")
                 sys.exit(1)
 
@@ -194,35 +178,27 @@ def main():
                         f"Conversion of unit for variable {var} is not implemented!"
                     )
                     sys.exit(1)
-                if not os.path.isfile(f"{tmp_outfile}"):
-                    logger.error(f"Output file {tmp_outfile} atfer unit conversion was not created successfully.")
+                if not os.path.isfile(tmp_outfile) or os.path.getsize(tmp_outfile) == 0:
+                    logger.error(f"Output file {tmp_outfile} after unit conversion was not created successfully.")
                     sys.exit(1)
 
             outfile_name = convert_era5_to_cmip(
-                tmp_outfile, store, proc_archive, era5_info, dataname, year, month,
+                tmp_outfile, outfile, store, era5_info,
                 config['chunking']['time_chk'], config['chunking']['lon_chk'], config['chunking']['lat_chk']
             )
-            if not os.path.isfile(f"{outfile_name}"):
+
+            assert outfile_name == outfile, f"Output file name {outfile_name} does not match expected file name {outfile}."
+
+            if not os.path.isfile(outfile_name) or os.path.getsize(outfile_name) == 0:
                 logger.error(f"Output file {outfile_name} after conversion to cmip format was not created successfully.")
                 sys.exit(1)
             else:
                 logger.info(f"File {outfile_name} written successfully.")
 
             # calculate monthly mean
-            outfile_mon = outfile_name.replace("day", "mon")
-            try:
-                cmd = [
-                    "cdo",
-                    "monmean",
-                    f'{outfile_name}',
-                    f'{outfile_mon}'
-                ]
-                subprocess.run(cmd, check=True, capture_output=True, text=True)
-            except subprocess.CalledProcessError as e:
-                print(f"Command failed with return code {e.returncode}")
-                print(f"Standard output:\n{e.stdout}")
-            if not os.path.isfile(f"{outfile_mon}"):
-                logger.error(f"Output file {outfile_mon} after conversion to cmip format was not created successfully.")
+            outfile_mon = calc_mon_mean(proc_archive, outfile_name)
+            if not os.path.isfile(outfile_mon) or os.path.getsize(outfile_mon) == 0:
+                logger.error(f"Output file {outfile_mon} not created successfully.")
                 sys.exit(1)
             else:
                 logger.info(f"File {outfile_mon} written successfully.")
@@ -230,8 +206,8 @@ def main():
         # -------------------------------------------------
         # Clean up
         # -------------------------------------------------
-        #os.system(f"rm {work_path}/{var}_*")
-        #os.system(f"rm {work_path}/tmp*")
+        os.system(f"rm {work_path}/{var}_*")
+        os.system(f"rm {work_path}/tmp*")
         if store == 'dkrz':
             os.system(f"rm {grib_path}/*")
 
