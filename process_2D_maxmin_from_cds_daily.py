@@ -164,31 +164,34 @@ def main():
         # process the downloaded file to cmip like format
         for month in months:
             file = download_file.replace("MM", month)
+            outfile = f'{proc_archive}/{era5_info["cmip_name"]}_day_{dataname}_{year}{month}.nc'
+            if os.path.isfile(outfile) and not overwrite:
+                logger.info(f"File {outfile} already exists and overwrite is set to False. Skipping processing of month {month}.")
+                continue
+
             tmp_outfile = convert_valid_time_latitude_longitude(
                     file, work_path, era5_info, dataname, year, month)
-            print(tmp_outfile)
+
             outfile_name = convert_era5_to_cmip(
-                tmp_outfile, store, proc_archive, era5_info, dataname, year, month,
+                tmp_outfile, outfile, store, era5_info,
                 config['chunking']['time_chk'], config['chunking']['lon_chk'], config['chunking']['lat_chk']
             )
-            logger.info(f"File {outfile_name} written.")
-            os.remove(tmp_outfile)
-            logger.info(f"Temporary file {tmp_outfile} removed.")
+            assert outfile_name == outfile, f"Output file name {outfile_name} does not match expected file name {outfile}."
+            if not os.path.isfile(outfile_name) or os.path.getsize(outfile_name) == 0:
+                logger.error(f"Output file {outfile_name} after conversion to cmip format was not created successfully.")
+                sys.exit(1)
+            else:
+                logger.info(f"File {outfile_name} written.")
+                os.remove(tmp_outfile)
+                logger.info(f"Temporary file {tmp_outfile} removed.")
 
             # calculate monthly mean
-            outfile_mon = outfile_name.replace("day", "mon")
-            print(outfile_mon)
-            try:
-                cmd = [
-                    "cdo",
-                    "monmean",
-                    f'{outfile_name}',
-                    f'{outfile_mon}'
-                ]
-                subprocess.run(cmd, check=True, capture_output=True, text=True)
-            except subprocess.CalledProcessError as e:
-                print(f"Command failed with return code {e.returncode}")
-                print(f"Standard output:\n{e.stdout}")
+            outfile_mon = calc_mon_mean(proc_archive, outfile_name)
+            if not os.path.isfile(outfile_mon) or os.path.getsize(outfile_mon) == 0:
+                logger.error(f"Output file {outfile_mon} not created successfully.")
+                sys.exit(1)
+            else:
+                logger.info(f"File {outfile_mon} written successfully.")
 
         # -------------------------------------------------
         # Clean up
