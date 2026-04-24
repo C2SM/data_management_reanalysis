@@ -18,41 +18,46 @@ mkdir -p logfiles
 {
 
 PYTHON_EXE=/usr/local/Miniconda3-envs/envs/2025/envs/iacpy3_2025/bin/python
-echo $PYTHON_EXE
-python -c "import sys; print(sys.executable)"
+$PYTHON_EXE -c "import sys; print(sys.executable)"
 
 # update daily 2D variables at surface available at DKRZ
-variable_list=("tp" "strd" "ssrd" "str" "cbh" "sst" "msl" "u10" "v10" "2t" "2d" "skt" "sp")
-#variable_list=(tp)
-for var in "${variable_list[@]}"; do
-    echo $var
-    $PYTHON_EXE process_2D_from_dkrz_or_cds_daily_files.py -c configs/Config_era5_1day_sf_dkrz.yaml -v $var
-done
+variable_list=("tp" "strd" "ssrd" "str" "sst" "msl" "u10" "v10" "2t" "2d" "skt" "sp" "tcc")
+#for var in "${variable_list[@]}"; do
+#    echo $var
+#    $PYTHON_EXE process_2D_from_dkrz_or_cds_daily_files.py -c configs/Config_era5_1day_sf_dkrz.yaml -v $var
+#done
+# Run in parallel
+echo ${variable_list[@]}
+printf "%s\n" "${variable_list[@]}" | parallel -j 64 $PYTHON_EXE process_2D_from_dkrz_or_cds_daily_files.py -c configs/Config_era5_1day_sf_dkrz.yaml -v $var {}
 
 # update daily 1D variables at surface available only on CDS
-variable_list=("tcc")
+variable_list=("cbh")
 for var in "${variable_list[@]}"; do
     echo $var
     $PYTHON_EXE process_2D_from_dkrz_or_cds_daily_files.py -c configs/Config_era5_1day_sf_cds.yaml -v $var
 done
 
-# update daily 2D variables calculated from hourly files at DKRZ
-# variable_list=(tasmax, tasmin)
+# update daily 2D variables calculated from hourly files at DKRZ,
+# e.g. max and min of 2m temperature, which are not available as daily files at DKRZ but can be calculated from hourly files
+echo "2t min and max"
 $PYTHON_EXE process_2D_maxmin_from_dkrz_hourly_files.py -c configs/Config_era5_2t_minmax_dkrz.yaml
 
-# variable_list=(sfcWind)
+# var=sfcWind
 $PYTHON_EXE process_2D_sfcWind_from_dkrz_hourly_files.py -c configs/Config_era5_1day_sfcWind_dkrz.yaml
 
 # update daily 3D variables available from DKRZ
-variable_list=("q" "r" "t" "u" "v")
-for var in "${variable_list[@]}"; do
-    $PYTHON_EXE process_3D_from_dkrz_daily_files.py -c configs/Config_era5_1day_pl_dkrz.yaml -v $var
-done
+variable_list=(q r t u v)
+#for var in "${variable_list[@]}"; do
+#    echo $var
+#    $PYTHON_EXE process_3D_from_dkrz_daily_files.py -c configs/Config_era5_1day_pl_dkrz.yaml -v $var
+#done
+# Run in parallel
+echo ${variable_list[@]}
+printf "%s\n" "${variable_list[@]}" | parallel -j 64 $PYTHON_EXE process_3D_from_dkrz_daily_files.py -c configs/Config_era5_1day_pl_dkrz.yaml -v $var {}
 
 # update z from hourly files at dkrz
-variable_list=("z")
-for var in "${variable_list[@]}"; do
-    $PYTHON_EXE process_3D_z_from_dkrz_hourly_files.py -c configs/Config_era5_1hr_pl_z_dkrz.yaml -v $var
-done
+var="z"
+$PYTHON_EXE process_3D_z_from_dkrz_hourly_files.py -c configs/Config_era5_1hr_pl_z_dkrz.yaml -v $var
+
 
 } 2>&1 | tee logfiles/${logfile}
