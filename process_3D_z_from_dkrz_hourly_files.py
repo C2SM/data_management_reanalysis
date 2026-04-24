@@ -213,7 +213,8 @@ def main():
                 for day in days:
                     day_str = f"{day:02d}"
 
-                    grib_file = f'{grib_path}/E5pl00_{freq}_{year}-{month}-{day_str}_{era5_info["param"]}.grb'
+                    #grib_file = f'{grib_path}/E5pl00_{freq}_{year}-{month}-{day_str}_{era5_info["param"]}.grb'
+                    grib_file = download_file.replace("MM", f"{month}").replace("DD", f"{day_str}")
 
                     tmp_outfile = convert_netcdf_add_era5_info(
                         grib_file, work_path, era5_info, year, month, day_str
@@ -281,6 +282,7 @@ def main():
                 outfile_name = convert_era5_to_cmip_plev(
                     daily_file, outfile, work_path, era5_info, year, month, lat_chk, lon_chk
                 )
+                assert outfile_name == outfile, f"Output file name {outfile_name} does not match expected file name {outfile}."
 
                 if not os.path.isfile(outfile_name) or os.path.getsize(outfile_name) == 0:
                     logger.warning(
@@ -292,7 +294,11 @@ def main():
 
                 # calculate monthly mean
                 outfile_mon = calc_mon_mean(proc_archive, outfile_name)
-                logger.info(f"File {outfile_mon} written.")
+                if not os.path.isfile(outfile_mon) or os.path.getsize(outfile_mon) == 0:
+                    logger.error(f"Output file {outfile_mon} not created successfully.")
+                    sys.exit(1)
+                else:
+                    logger.info(f"File {outfile_mon} written.")
 
         # -------------------------------------------------
         # Clean up
