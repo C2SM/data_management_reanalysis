@@ -30,7 +30,7 @@ local_time = time.localtime(seconds)
 # Name the logfile after first of all inputs
 LOG_FILENAME = (
     f"logfiles/logging_ERA5_dkrz_pl_z_hourly_to_daily_"
-    f"_{local_time.tm_year}{local_time.tm_mon}"
+    f"{local_time.tm_year}{local_time.tm_mon}"
     f"{local_time.tm_mday}{local_time.tm_hour}{local_time.tm_min}"
     f".out"
 )
