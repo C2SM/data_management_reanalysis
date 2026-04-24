@@ -522,7 +522,7 @@ def convert_valid_time_latitude_longitude(ncfile, workdir, era5_info, dataname, 
     return tmp_outfile
 
 
-def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, dataname, year, month, time_chk, lon_chk, lat_chk):
+def convert_era5_to_cmip(tmp_outfile, outfile, store, era5_info, time_chk, lon_chk, lat_chk):
     """
     Convert netcdf to cmip compliant netcdf
         - remap to CDS grid if data is stored at DKRZ
@@ -536,7 +536,6 @@ def convert_era5_to_cmip(tmp_outfile, store, proc_archive, era5_info, dataname, 
 
     path_to_tmp = Path(tmp_outfile)
     tmpfile = f'{str(path_to_tmp.parent)}/{path_to_tmp.stem}'
-    outfile = f'{proc_archive}/{era5_info["cmip_name"]}_day_{dataname}_{year}{month}.nc'
 
     if store == 'dkrz':
         try:
@@ -652,7 +651,8 @@ def convert_era5_to_cmip_plev(
     Returns:
     Name of the netcdf file with renamed variable and added attributes
     """
-    tmpfile = f'{work_path}/{era5_info["short_name"]}_era5_{year}{month}'
+    path_to_tmp = Path(tmp_outfile)
+    tmpfile = f'{str(path_to_tmp.parent)}/{path_to_tmp.stem}'
 
     # extract number of p-levels for chunking
     with xr.open_dataset(f"{tmp_outfile}") as ds:
@@ -743,9 +743,5 @@ def calc_mon_mean(inpath, infile):
     except RuntimeError as e:
         logger.error(f"CDO execution failed!")
         logger.error(f"Error details: {e}")
-
-    if not os.path.exists(outfile_mon) or os.path.getsize(outfile_mon) == 0:
-        logger.warning(f"File {outfile_mon} was not created successfully.")
-        sys.exit(1)
 
     return outfile_mon
