@@ -226,6 +226,8 @@ def main():
                 outfile_name = convert_era5_to_cmip_plev(
                     tmp_outfile, outfile, work_path, era5_info, year, month, config['chunking']['lat_chk'], config['chunking']['lon_chk']
                 )
+                assert outfile_name == outfile, f"Output file name {outfile_name} does not match expected file name {outfile}."
+
                 if not os.path.isfile(outfile_name) or os.path.getsize(outfile_name) == 0:
                     logger.error(f"Output file {outfile_name} was not created successfully.")
                     sys.exit(1)

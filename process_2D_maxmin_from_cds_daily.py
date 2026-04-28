@@ -131,6 +131,10 @@ def main():
         else:
             logger.error(f"Variable {var} with statistic {statistic} not implemented yet.")
             sys.exit(1)
+    else:
+        varout = var
+        era5_info["cmip_name"] = varout
+        logger.info(f'cmip_name: {era5_info["cmip_name"]},')
 
     work_path = f"{work_all_path}/{varout}/"
     grib_path = f"{download_path}/{varout}/"
