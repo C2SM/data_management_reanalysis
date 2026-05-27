@@ -24,7 +24,7 @@ $PYTHON_EXE -c "import sys; print(sys.executable)"
 
 # check if git repository is clean, i.e. no uncommitted changes, to avoid that changes are overwritten by the update process
 if [[ -n $(git status --porcelain) ]]; then
-  echo "There are uncommitted changes in the repository. Please commit or stash them before running the update script."
+  echo "There are uncommitted changes in the repository. Please commit and push them before running the update script."
   exit 1
 fi
 
