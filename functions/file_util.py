@@ -14,29 +14,6 @@ import argparse
 
 logger = logging.getLogger(__name__)
 
-class Config:
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-
-def read_config(configfolder, configfile):
-    config = {}
-    type_mapping = {"True": True, "False": False}
-    with open(os.path.join(os.getcwd(), configfolder, configfile), "r") as f:
-        for line in f:
-            if "=" in line:
-                k, v = line.split("=", 1)
-                v = v.replace('"', "").strip()
-                if "," in v:
-                    v = [item.strip() for item in v.split(",")]
-                elif " " in v:
-                    v = v.split(" ")
-                else:
-                    v = type_mapping.get(v, int(v) if v.isdigit() else v)
-                config[k.strip()] = v
-
-    return Config(**config)
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -152,7 +129,7 @@ def read_cmip_info(cmip_name):
     url = 'https://raw.githubusercontent.com/PCMDI/cmip6-cmor-tables/refs/heads/main/Tables/CMIP6_day.json'
     resp = requests.get(url)
     data = json.loads(resp.text)
-    #print(data)
+
     try:
         return data["variable_entry"][cmip_name]["standard_name"], data["variable_entry"][cmip_name]["long_name"]
     except KeyError:
