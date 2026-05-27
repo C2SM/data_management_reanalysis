@@ -30,7 +30,7 @@ fi
 
 
 # update daily 2D variables at surface available at DKRZ
-variable_list=("tp" "strd" "ssrd" "str" "sst" "msl" "u10" "v10" "2t" "2d" "skt" "sp" "tcc")
+variable_list=("tp" "strd" "ssrd" "str" "sst" "msl" "u10" "v10" "2t" "2d" "skt" "sp")
 #for var in "${variable_list[@]}"; do
 #    echo $var
 #    $PYTHON_EXE process_2D_from_dkrz_or_cds_daily_files.py -c configs/Config_era5_1day_sf_dkrz.yaml -v $var
@@ -39,11 +39,16 @@ variable_list=("tp" "strd" "ssrd" "str" "sst" "msl" "u10" "v10" "2t" "2d" "skt" 
 echo ${variable_list[@]}
 printf "%s\n" "${variable_list[@]}" | parallel -j 64 nice $PYTHON_EXE process_2D_from_dkrz_or_cds_daily_files.py -c configs/Config_era5_1day_sf_dkrz.yaml -v $var {}
 
+
+# update daily 2D variable tcc=clt at surface (available at DKRZ but v3 needs to be updated insterad v2, v2 contains not cmip standard unit fraction
+var="tcc"
+nice $PYTHON_EXE process_2D_from_dkrz_or_cds_daily_files.py -c configs/Config_era5_1day_sf_clt_dkrz.yaml -v $var
+
 # update daily 1D variables at surface available only on CDS
 variable_list=("cbh")
 for var in "${variable_list[@]}"; do
     echo $var
-    $PYTHON_EXE process_2D_from_dkrz_or_cds_daily_files.py -c configs/Config_era5_1day_sf_cds.yaml -v $var
+    nice $PYTHON_EXE process_2D_from_dkrz_or_cds_daily_files.py -c configs/Config_era5_1day_sf_cds.yaml -v $var
 done
 
 # update daily 2D variables calculated from hourly files at DKRZ,
