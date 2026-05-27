@@ -10,7 +10,9 @@
 #   then data from 2025-11 will be downloaded and processed
 
 ###-------------------------------------------------------
-
+. /etc/profile.d/iac-path.sh
+. /etc/profile.d/modules.sh
+module load conda
 ###-------------------------------------------------------
 printf -v date '%(%Y-%m-%d_%H%M%S)T' -1
 logfile="update_era5_$date.log"
@@ -20,6 +22,13 @@ mkdir -p logfiles
 PYTHON_EXE=/usr/local/Miniconda3-envs/envs/2025/envs/iacpy3_2025/bin/python
 $PYTHON_EXE -c "import sys; print(sys.executable)"
 
+# check if git repository is clean, i.e. no uncommitted changes, to avoid that changes are overwritten by the update process
+if [[ -n $(git status --porcelain) ]]; then
+  echo "There are uncommitted changes in the repository. Please commit or stash them before running the update script."
+  exit 1
+fi
+
+
 # update daily 2D variables at surface available at DKRZ
 variable_list=("tp" "strd" "ssrd" "str" "sst" "msl" "u10" "v10" "2t" "2d" "skt" "sp" "tcc")
 #for var in "${variable_list[@]}"; do
@@ -28,7 +37,7 @@ variable_list=("tp" "strd" "ssrd" "str" "sst" "msl" "u10" "v10" "2t" "2d" "skt" 
 #done
 # Run in parallel
 echo ${variable_list[@]}
-printf "%s\n" "${variable_list[@]}" | parallel -j 64 $PYTHON_EXE process_2D_from_dkrz_or_cds_daily_files.py -c configs/Config_era5_1day_sf_dkrz.yaml -v $var {}
+printf "%s\n" "${variable_list[@]}" | parallel -j 64 nice $PYTHON_EXE process_2D_from_dkrz_or_cds_daily_files.py -c configs/Config_era5_1day_sf_dkrz.yaml -v $var {}
 
 # update daily 1D variables at surface available only on CDS
 variable_list=("cbh")
@@ -40,10 +49,10 @@ done
 # update daily 2D variables calculated from hourly files at DKRZ,
 # e.g. max and min of 2m temperature, which are not available as daily files at DKRZ but can be calculated from hourly files
 echo "2t min and max"
-$PYTHON_EXE process_2D_maxmin_from_dkrz_hourly_files.py -c configs/Config_era5_2t_minmax_dkrz.yaml
+nice $PYTHON_EXE process_2D_maxmin_from_dkrz_hourly_files.py -c configs/Config_era5_2t_minmax_dkrz.yaml
 
 # var=sfcWind
-$PYTHON_EXE process_2D_sfcWind_from_dkrz_hourly_files.py -c configs/Config_era5_1day_sfcWind_dkrz.yaml
+nice $PYTHON_EXE process_2D_sfcWind_from_dkrz_hourly_files.py -c configs/Config_era5_1day_sfcWind_dkrz.yaml
 
 # update daily 3D variables available from DKRZ
 variable_list=(q r t u v)
@@ -53,11 +62,11 @@ variable_list=(q r t u v)
 #done
 # Run in parallel
 echo ${variable_list[@]}
-printf "%s\n" "${variable_list[@]}" | parallel -j 64 $PYTHON_EXE process_3D_from_dkrz_daily_files.py -c configs/Config_era5_1day_pl_dkrz.yaml -v $var {}
+printf "%s\n" "${variable_list[@]}" | parallel -j 64 nice $PYTHON_EXE process_3D_from_dkrz_daily_files.py -c configs/Config_era5_1day_pl_dkrz.yaml -v $var {}
 
 # update z from hourly files at dkrz
 var="z"
-$PYTHON_EXE process_3D_z_from_dkrz_hourly_files.py -c configs/Config_era5_1hr_pl_z_dkrz.yaml -v $var
+nice $PYTHON_EXE process_3D_z_from_dkrz_hourly_files.py -c configs/Config_era5_1hr_pl_z_dkrz.yaml -v $var
 
 
 } 2>&1 | tee logfiles/${logfile}
