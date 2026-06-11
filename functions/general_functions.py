@@ -607,6 +607,21 @@ def convert_era5_to_cmip(tmp_outfile, outfile, store, era5_info, time_chk, lon_c
             except subprocess.CalledProcessError as e:
                 logger.error(f"Command failed with return code {e.returncode}")
                 logger.error(f"Standard output:\n{e.stdout}")
+        elif era5_info["short_name"]=='2d':
+            logger.info(f"Try with using d2m instead 2d.")
+            try:
+                cmd = [
+                    "ncrename",
+                    "-O",
+                    "-v",
+                    f'd2m,{era5_info["cmip_name"]}',
+                    f"{tmpfile}_chunked.nc",
+                    f"{outfile}"
+                ]
+                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Command failed with return code {e.returncode}")
+                logger.error(f"Standard output:\n{e.stdout}")
 
     # read cmip standard_name and long_name from cmip6-cmor-tables
     standard_name, long_name = read_cmip_info(era5_info["cmip_name"])
