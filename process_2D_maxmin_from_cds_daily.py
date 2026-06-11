@@ -65,7 +65,7 @@ def main():
     parser.add_argument(
         "-v",
         "--var",
-        help="ERA5 variable to be processed, e.g. 2t, tcc, tp, ssrd, strd, str, ssr",
+        help="ERA5 variable to be processed, e.g. 2t for 2m temperature",
         required=True,
     )
     parser.add_argument(

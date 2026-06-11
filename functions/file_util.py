@@ -15,7 +15,7 @@ import argparse
 logger = logging.getLogger(__name__)
 
 
-def parse_args():
+def parse_args(args=None):
     parser = argparse.ArgumentParser(
         description="Download ERA5 data and process to CMIP like"
     )
@@ -32,7 +32,7 @@ def parse_args():
         required=True,
     )
 
-    return parser.parse_args()
+    return parser.parse_args(args)
 
 
 def read_era5_info(vname):
