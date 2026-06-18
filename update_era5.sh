@@ -22,6 +22,8 @@ mkdir -p logfiles
 PYTHON_EXE=/usr/local/Miniconda3-envs/envs/2025/envs/iacpy3_2025/bin/python
 $PYTHON_EXE -c "import sys; print(sys.executable)"
 
+cd /home/rlorenz/scripts/data_management_reanalysis
+
 # check if git repository is clean, i.e. no uncommitted changes, to avoid that changes are overwritten by the update process
 if [[ -n $(git status --porcelain) ]]; then
   echo "There are uncommitted changes in the repository. Please commit and push them before running the update script."
