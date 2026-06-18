@@ -117,13 +117,21 @@ def main():
         logger.info(f"Processing year {year}, month(s) {months}.")
 
         if store == 'dkrz':
-            download_file = download_data_dkrz(
+            download_file, code = download_data_dkrz(
                 freq=freq, era5_info=era5_info, origin=origin, iac_path=grib_path, year=year, months=months, all_months=all_months, family=family, level=level)
-            download_success = f"Data download successful!"
+            if code != 0:
+                logger.error(f"Download of data for year {year} failed with code {code}.")
+                sys.exit(1)
+            else:
+                download_success = f"Data download successful!"
         elif store == 'cds':
-            download_file = download_data_cds(
+            download_file, code = download_data_cds(
                 dataname=dataname, era5_info=era5_info, origin=origin, workdir=work_path, year=year, months=months, overwrite=overwrite)
-            download_success = f"Data download successful!"
+            if code != 0:
+                logger.error(f"Download of data for year {year} failed with code {code}.")
+                sys.exit(1)
+            else:
+                download_success = f"Data download successful!"
         else:
             download_success = f"Warning, download from store {store} not implemented."
         logger.info(download_success)
@@ -171,6 +179,10 @@ def main():
                     )
                 elif var == "ssrd" or var == "strd" or var == "str" or var == "ssr":
                     tmp_outfile = convert_radiation(
+                        tmp_outfile, work_path, era5_info, dataname, year, month
+                    )
+                elif var == "sd":
+                    tmp_outfile = convert_snow_depth(
                         tmp_outfile, work_path, era5_info, dataname, year, month
                     )
                 else:
