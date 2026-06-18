@@ -71,8 +71,10 @@ def download_data_dkrz(freq, era5_info, origin, iac_path, year, months, all_mont
                 f"{iac_path}"
             ]
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            returncode = result.returncode
         except subprocess.CalledProcessError as e:
-            logger.error(f"Command failed with return code {e.returncode}")
+            returncode = e.returncode
+            logger.error(f"Command failed with return code {returncode}")
             logger.error(f"Standard output:\n{e.stdout}")
             logger.error(f"Standard error:\n{e.stderr}")
     else:
@@ -86,15 +88,17 @@ def download_data_dkrz(freq, era5_info, origin, iac_path, year, months, all_mont
                     f"{iac_path}"
                 ]
                 result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                returncode = result.returncode
             except subprocess.CalledProcessError as e:
-                logger.error(f"Command failed with return code {e.returncode}")
+                returncode = e.returncode
+                logger.error(f"Command failed with return code {returncode}")
                 logger.error(f"Standard output:\n{e.stdout}")
                 logger.error(f"Standard error:\n{e.stderr}")
     if freq == "1D":
         gribfile = f'{iac_path}{family}{level}{typeid}_{freq}_{year}-MM_{vparam}.grb'
     elif freq == "1H":
         gribfile = f'{iac_path}{family}{level}{typeid}_{freq}_{year}-MM-DD_{vparam}.grb'
-    return gribfile
+    return gribfile, returncode
 
 
 def download_data_cds(dataname, era5_info, origin, workdir, year, months, overwrite, statistic="daily_mean"):
@@ -147,7 +151,13 @@ def download_data_cds(dataname, era5_info, origin, workdir, year, months, overwr
             client = cdsapi.Client()
             client.retrieve(dataset, request, target)
 
-    return target_allg
+        # check if download was successful
+        if not os.path.isfile(f'{target}') or os.path.getsize(f'{target}') == 0:
+            logger.error(f"Download of {target} was not successful.")
+            returncode = 1
+            sys.exit(1)
+
+    return target_allg, returncode
 
 def convert_netcdf_add_era5_info(grib_file, workdir, era5_info, dataname, year, month, day=None):
     """
@@ -477,6 +487,62 @@ def convert_radiation(rad_outfile, workdir, data_info, dataname, year, month):
         sys.exit(1)
 
     return rad_outfile
+
+
+def convert_snow_depth(tmp_outfile, work_path, era5_info, dataname, year, month):
+    """
+    Convert snow depth from m of water equivalent to m
+
+    Returns:
+    Name of the netcdf file with converted units
+    """
+    if (era5_info["unit"] == 'm of water equivalent') and era5_info["cmip_unit"] == 'm':
+        logger.info(f"Converting from {era5_info['unit']} to {era5_info['cmip_unit']} for variable {era5_info['short_name']}.")
+        logger.info(f"These are essentially the same units, but we need to change the unit attribute to be compliant with cmip standards.")
+
+        # move incoming file to be overwritten with unit conversion file
+        try:
+            cmd = [
+                "mv",
+                f"{tmp_outfile}",
+                f"{work_path}/tmp_snow_depth.nc"
+            ]
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Command failed with return code {e.returncode}")
+            logger.error(f"Standard output:\n{e.stdout}")
+
+        # set units attribute to cmip unit
+        try:
+            cmd = [
+                "ncatted",
+                "-a",
+                f"units,{era5_info['short_name']},m,c,{era5_info['cmip_unit']}",
+                f"{work_path}/tmp_snow_depth.nc",
+                f"{tmp_outfile}"]
+            results = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Command failed with return code {e.returncode}")
+            logger.error(f"Standard output:\n{e.stdout}")
+
+        try:
+            cmd = [
+                "rm",
+                f"{work_path}/tmp_snow_depth.nc"
+            ]
+            results = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Command failed with return code {e.returncode}")
+            logger.error(f"Standard output:\n{e.stdout}")
+    else:
+        logger.error(f'Not implemented error. Conversion for conversion from {era5_info["unit"]} to {era5_info["cmip_unit"]} not available.')
+        sys.exit(1)
+    # check if tmp_outfile was created successfully
+    if not os.path.isfile(f"{tmp_outfile}") or os.path.getsize(f"{tmp_outfile}") == 0:
+        logger.error(f"Output file {tmp_outfile} was not created successfully.")
+        sys.exit(1)
+
+    return tmp_outfile
 
 
 def convert_valid_time_latitude_longitude(ncfile, workdir, era5_info, dataname, year, month):
