@@ -32,7 +32,7 @@ fi
 
 
 # update daily 2D variables at surface available at DKRZ
-variable_list=("tp" "strd" "ssrd" "str" "sst" "msl" "u10" "v10" "2t" "2d" "skt" "sp")
+variable_list=("tp" "strd" "ssrd" "str" "sst" "msl" "u10" "v10" "2t" "2d" "sp")
 #for var in "${variable_list[@]}"; do
 #    echo $var
 #    $PYTHON_EXE process_2D_from_dkrz_or_cds_daily_files.py -c configs/Config_era5_1day_sf_dkrz.yaml -v $var
@@ -62,7 +62,7 @@ nice $PYTHON_EXE process_2D_maxmin_from_dkrz_hourly_files.py -c configs/Config_e
 nice $PYTHON_EXE process_2D_sfcWind_from_dkrz_hourly_files.py -c configs/Config_era5_1day_sfcWind_dkrz.yaml
 
 # update daily 3D variables available from DKRZ
-variable_list=(q r t u v)
+variable_list=("q" "r" "t" "u" "v")
 #for var in "${variable_list[@]}"; do
 #    echo $var
 #    $PYTHON_EXE process_3D_from_dkrz_daily_files.py -c configs/Config_era5_1day_pl_dkrz.yaml -v $var
