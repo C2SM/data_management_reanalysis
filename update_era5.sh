@@ -22,6 +22,8 @@ mkdir -p logfiles
 PYTHON_EXE=/usr/local/Miniconda3-envs/envs/2025/envs/iacpy3_2025/bin/python
 $PYTHON_EXE -c "import sys; print(sys.executable)"
 
+cd /home/rlorenz/scripts/data_management_reanalysis
+
 # check if git repository is clean, i.e. no uncommitted changes, to avoid that changes are overwritten by the update process
 if [[ -n $(git status --porcelain) ]]; then
   echo "There are uncommitted changes in the repository. Please commit and push them before running the update script."
@@ -30,7 +32,7 @@ fi
 
 
 # update daily 2D variables at surface available at DKRZ
-variable_list=("tp" "strd" "ssrd" "str" "sst" "msl" "u10" "v10" "2t" "2d" "skt" "sp")
+variable_list=("tp" "strd" "ssrd" "str" "sst" "msl" "u10" "v10" "2t" "2d" "sp")
 #for var in "${variable_list[@]}"; do
 #    echo $var
 #    $PYTHON_EXE process_2D_from_dkrz_or_cds_daily_files.py -c configs/Config_era5_1day_sf_dkrz.yaml -v $var
@@ -60,7 +62,7 @@ nice $PYTHON_EXE process_2D_maxmin_from_dkrz_hourly_files.py -c configs/Config_e
 nice $PYTHON_EXE process_2D_sfcWind_from_dkrz_hourly_files.py -c configs/Config_era5_1day_sfcWind_dkrz.yaml
 
 # update daily 3D variables available from DKRZ
-variable_list=(q r t u v)
+variable_list=("q" "r" "t" "u" "v")
 #for var in "${variable_list[@]}"; do
 #    echo $var
 #    $PYTHON_EXE process_3D_from_dkrz_daily_files.py -c configs/Config_era5_1day_pl_dkrz.yaml -v $var
