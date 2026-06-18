@@ -9,7 +9,7 @@
   "v10"       : ["10m_v_component_of_wind"                             , "m s-1"                 , "166"     , "sfc"     , "1"  , "1"  , "vas"      , "m s-1"   ],
   "2t"        : ["2m_temperature"                                      , "K"                     , "167"     , "sfc"     , "1"  , "1"  , "tas"      , "K"       ],
   "2d"        : ["2m_dewpoint_temperature"                             , "K"                     , "168"     , "sfc"     , "1"  , "1"  , "d2m"      , "K"       ],
-  "skt"       : ["skin_temperature"                                    , "K"                     , "198"     , "sfc"     , "1"  , "1"  , "ts"         , "K"       ],
+  "skt"       : ["skin_temperature"                                    , "K"                     , "235"     , "sfc"     , "1"  , "1"  , "ts"       , "K"       ],
   "sp"        : ["surface_pressure"                                    , "Pa"                    , "134"     , "sfc"     , "1"  , "1"  , "ps"       , "Pa"      ],
   "---------" : ["---------------------------------------------------" , "---------------------" , "-------" , "-------" , "--" , "--" , "--------" , "--------"],
   "strd"      : ["surface_thermal_radiation_downwards"                 , "J m-2"                 , "175"     , "sfc"     , "0"  , "1"  , "rlds"     , "W m-2"   ],
