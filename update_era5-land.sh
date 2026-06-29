@@ -36,7 +36,7 @@ echo ${variable_list[@]}
 printf "%s\n" "${variable_list[@]}" | parallel -j 64 nice $PYTHON_EXE process_2D_from_dkrz_or_cds_daily_files.py -c configs/Config_era5-land_1day_sf_dkrz.yaml -v $var {}
 
 # update daily 2D variables available as daily statistics from CDS
-#variable_list=("2d", "2t", "10u", "10v", "sp")
+#variable_list=("2d", "2t", "u10", "v10", "sp")
 nice $PYTHON_EXE process_2D_analysis_multvars_from_cds_daily.py -c configs/Config_era5-land_daily_multvar_cds.yaml
 
 # update daily 2D variables only available as hourly files at CDS
