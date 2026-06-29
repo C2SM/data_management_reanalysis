@@ -16,6 +16,18 @@ def read_yaml_config(file_path):
     try:
         with open(file_path, 'r') as file:
             config = yaml.safe_load(file)
+
+        v = config.get("variables", {})
+        if "varlist" in v:
+            varlist = v["varlist"]
+            if isinstance(varlist, str):
+                config['variables']['varlist'] = [var.strip() for var in varlist.split(',')]
+            elif isinstance(varlist, list):
+                config['variables']['varlist'] = [var.strip() for var in varlist]
+            else:
+                raise ValueError("Invalid format for 'varlist'. Must be a string or list.")
+
+
         d = config.get("time", {})
         t_month = d.get("months")
         start_year = d.get("startyr")
