@@ -76,6 +76,50 @@ def read_era5_info(vname):
 
     return era5_info
 
+
+def read_era5_info_list(vname_list):
+    """
+    Loading ERA5 variables's information as
+    python Dictionary from JSON file
+
+    Input:
+    a list of strings with the ERA5 variable short names to be processed
+
+    Return:
+    dict with variable infos
+    """
+    era5_info = dict()
+
+    with open("ERA5_variables.json", "r") as jf:
+        era5 = json.load(jf)
+        # Variable's long-name, param and unit
+        for vname in vname_list:
+            print(vname)
+            vlong = era5[vname][0]
+            vunit = era5[vname][1]
+            vparam = era5[vname][2]
+            analysis = era5[vname][4]
+            forecast = era5[vname][5]
+            vcmip = era5[vname][6]
+            unitcmip = era5[vname][7]
+
+            era5_info[vname] = {}
+            era5_info[vname]["short_name"] = vname
+            era5_info[vname]["long_name"] = vlong
+            era5_info[vname]["unit"] = vunit
+            era5_info[vname]["param"] = vparam
+            era5_info[vname]["analysis"] = analysis
+            era5_info[vname]["cmip_name"] = vcmip
+            era5_info[vname]["cmip_unit"] = unitcmip
+
+            logger.info(f'longname: {era5_info[vname]["long_name"]},')
+            logger.info(f'unit: {era5_info[vname]["unit"]},')
+            logger.info(f'oldname: {era5_info[vname]["param"]},')
+            logger.info(f'cmipname: {era5_info[vname]["cmip_name"]},')
+            logger.info(f'cmipunit: {era5_info[vname]["cmip_unit"]}.')
+
+    return era5_info
+
 # -------------------------------------------------
 # Read CERRA info from JSON file
 # -------------------------------------------------
