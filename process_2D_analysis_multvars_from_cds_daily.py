@@ -22,12 +22,13 @@ import subprocess
 import sys
 import time
 import argparse
+import json
 from datetime import datetime
 from pathlib import Path
 import cdsapi
 import xarray as xr
 from cdo import Cdo
-from functions.file_util import parse_args
+from functions.file_util import parse_args, read_era5_info_list
 from functions.read_config import read_yaml_config
 from functions.general_functions import convert_month_list, convert_valid_time_latitude_longitude, convert_era5_to_cmip, calc_mon_mean
 
@@ -57,48 +58,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # -------------------------------------------------
-
-def read_era5_info(vname_list):
-    """
-    Loading ERA5 variables's information as
-    python Dictionary from JSON file
-
-    Input:
-    a list of strings with the ERA5 variable short names to be processed
-
-    Return:
-    dict with variable infos
-    """
-    era5_info = dict()
-
-    with open("ERA5_variables.json", "r") as jf:
-        era5 = json.load(jf)
-        # Variable's long-name, param and unit
-        for vname in vname_list:
-            vlong = era5[vname][0]
-            vunit = era5[vname][1]
-            vparam = era5[vname][2]
-            analysis = era5[vname][4]
-            forecast = era5[vname][5]
-            vcmip = era5[vname][6]
-            unitcmip = era5[vname][7]
-
-            era5_info[vname] = {}
-            era5_info[vname]["short_name"] = vname
-            era5_info[vname]["long_name"] = vlong
-            era5_info[vname]["unit"] = vunit
-            era5_info[vname]["param"] = vparam
-            era5_info[vname]["analysis"] = analysis
-            era5_info[vname]["cmip_name"] = vcmip
-            era5_info[vname]["cmip_unit"] = unitcmip
-
-            logger.info(f'longname: {era5_info[vname]["long_name"]},')
-            logger.info(f'unit: {era5_info[vname]["unit"]},')
-            logger.info(f'oldname: {era5_info[vname]["param"]},')
-            logger.info(f'cmipname: {era5_info[vname]["cmip_name"]},')
-            logger.info(f'cmipunit: {era5_info[vname]["cmip_unit"]}.')
-
-    return era5_info
 
 
 def download_data_cds_multvar(dataname, varlist, download_path, year, month, statistic="daily_mean"):
@@ -182,7 +141,6 @@ def main():
 
     # variable to be processed
     var_list_short = config['variables']['varlist']
-    freq = config['variables']['freq']
     statistic = config['variables']['statistic']
 
     # configured paths
@@ -211,13 +169,13 @@ def main():
     # read ERA5_variables.json
     # -------------------------------------------------
     logger.info(f"{config['dataset']['name']} variable info red from json file.")
-    era5_info = read_era5_info(var_list_short)
+    era5_info = read_era5_info_list(var_list_short)
     print(era5_info)
 
     # download and process for all years in configuration
     for year in range(startyr, endyr + 1):
         logger.info(f"Processing year {year}.")
-        logger.info(f"Copying variables {var_list} from {store}.")
+        logger.info(f"Copying variables {var_list_short} from {store}.")
 
         varlist_long = [era5_info[var]['long_name'] for var in var_list_short]
         print(f"Variable list for download: {varlist_long}")
@@ -239,7 +197,7 @@ def main():
                     statistic_string = statistic.replace("_", "-")
                     file = f'{work_all_path}/{var_long}_0_{statistic_string}.nc'
                     if not os.path.isfile(file):
-                        logger.error(f"Expected file {file} for variable {var} not found after unzipping."
+                        logger.error(f"Expected file {file} for variable {var} not found after unzipping.")
                         logger.error(f"Check if the variable long name in era5_info matches the file name in the zip file.")
                         sys.exit(1)
 
@@ -279,3 +237,12 @@ def main():
             download_success = f"Warning, download from store {store} not implemented."
         logger.info(download_success)
 
+        # clean up work directory after processing all months for the year
+        #if os.path.isdir(work_all_path):
+        #    logger.info(f"Cleaning up work directory {work_all_path} after processing year {year}.")
+        #    shutil.rmtree(work_all_path)
+        #    logger.info(f"Work directory {work_all_path} removed.")
+
+
+if __name__ == "__main__":
+    main()
