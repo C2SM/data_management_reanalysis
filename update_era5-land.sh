@@ -15,7 +15,7 @@
 module load conda
 ###-------------------------------------------------------
 printf -v date '%(%Y-%m-%d_%H%M%S)T' -1
-logfile="update_era5_$date.log"
+logfile="update_era5-land_$date.log"
 mkdir -p logfiles
 {
 
@@ -39,5 +39,8 @@ printf "%s\n" "${variable_list[@]}" | parallel -j 64 nice $PYTHON_EXE process_2D
 #variable_list=("2d", "2t", "u10", "v10", "sp")
 nice $PYTHON_EXE process_2D_analysis_multvars_from_cds_daily.py -c configs/Config_era5-land_daily_multvar_cds.yaml
 
-# update daily 2D variables only available as hourly files at CDS
-variable_list=("e", "pev", "smlt", "ssrd", "strd")
+# update daily 2D variables only available as hourly files at CDS, accumulated variables are summed up to daily values at next day 00:00:00
+#variable_list=("e", "pev", "smlt", "ssrd", "strd")
+nice $PYTHON_EXE process_2D_accumulated_daily_multvar_from_cds_hourly.py -c configs/Config_era5-land_hourly_accum_multvar_cds.yaml
+
+} 2>&1 | tee logfiles/${logfile}
