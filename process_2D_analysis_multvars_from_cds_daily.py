@@ -25,6 +25,7 @@ import argparse
 import json
 from datetime import datetime
 from pathlib import Path
+import zipfile
 import cdsapi
 import xarray as xr
 from cdo import Cdo
@@ -60,7 +61,7 @@ logger = logging.getLogger(__name__)
 # -------------------------------------------------
 
 
-def download_data_cds_multvar(dataname, varlist, download_path, year, month, statistic="daily_mean"):
+def download_data_cds_multvar(dataname, varlist, download_path, year, month, statistic="daily_mean", overwrite=False):
     '''
     Download data from CDS for given variables, year and month, and save to target file.
     It will download all variables in varlist in one request, and save to one zip file by default.
@@ -72,6 +73,7 @@ def download_data_cds_multvar(dataname, varlist, download_path, year, month, sta
     year: year to be downloaded, e.g. 2020
     month: month to be downloaded, e.g. "01" for January
     statistic: daily statistic to be downloaded, e.g. "daily_mean", "daily_maximum", "daily_minimum"
+    overwrite: whether to overwrite existing files
     '''
     target = f'{download_path}/variables_{statistic}_{dataname}_{year}{month}.zip'
 
@@ -182,13 +184,13 @@ def main():
         if store == 'cds':
             for month in months:
                 # reteive data from cds, returns path to downloaded file, all variables in one file
-                download_file_multvar = download_data_cds_multvar(dataname, varlist_long, download_path, year, month, statistic)
+                download_file_multvar = download_data_cds_multvar(dataname, varlist_long, download_path, year, month, statistic, overwrite=overwrite)
                 # process the downloaded file
                 # 1. unzip into single variable files
                 with zipfile.ZipFile(download_file_multvar, 'r') as zip_ref:
                     zip_ref.extractall(work_all_path)
                 for v, var in enumerate(var_list_short):
-                    proc_archive = f'{proc_path}/{var}/day/native/{year}'
+                    proc_archive = f'{proc_path}/{era5_info[var]["cmip_name"]}/day/native/{year}'
                     os.makedirs(proc_archive, exist_ok=True)
                     work_path = f"{work_all_path}/{var}/"
                     os.makedirs(work_path, exist_ok=True)
@@ -202,7 +204,7 @@ def main():
                         sys.exit(1)
 
                     # 2. process each variable separately, with renaming and unit conversion if necessary, and write to cmip like format
-                    outfile = f'{proc_archive}/{era5_info[var]["cmip_name"]}_{statistic_string}_{dataname}_{year}{month}.nc'
+                    outfile = f'{proc_archive}/{era5_info[var]["cmip_name"]}_day_{dataname}_{year}{month}.nc'
                     if os.path.isfile(outfile) and not overwrite:
                         logger.info(f"File {outfile} already exists and overwrite is set to False.")
                         logger.info(f"Skipping processing of variable {var} for month {month}.")
@@ -221,6 +223,8 @@ def main():
                         sys.exit(1)
                     else:
                         logger.info(f"File {outfile_name} written.")
+                        os.remove(file)
+                        logger.info(f"Temporary file {file} removed.")
                         os.remove(tmp_outfile)
                         logger.info(f"Temporary file {tmp_outfile} removed.")
 
