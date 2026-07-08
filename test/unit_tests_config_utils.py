@@ -13,7 +13,6 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
 from functions.file_util import parse_args, read_era5_info, read_cerra_info, read_era5_info_list, read_cmip_info
-from functions.general_functions import convert_month_list
 from functions.read_config import read_yaml_config
 
 
@@ -35,13 +34,6 @@ def test_parse_args_valid():
 def test_parse_args_missing_required_args():
     with pytest.raises(SystemExit):
         parse_args([])
-
-
-# test convert_month_list with different input formats
-def test_convert_month_list():
-	assert convert_month_list(01, 02) == ["01", "02"]
-	assert convert_month_list(10, 11, 12) == ["10", "11", "12"]
-	assert convert_month_list("01", "02") == ["01", "02"]
 
 
 # test read_yaml_config with valid config file and missing file

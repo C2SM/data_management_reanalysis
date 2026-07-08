@@ -45,6 +45,8 @@ def download_data_dkrz(freq, era5_info, origin, iac_path, year, months, all_mont
     name pattern of the grib file,
     MM instead month number, DD instead day number (if applicable), to be replaced in processing loop
     """
+    # This prevents an UnboundLocalError if all_months=False and the months list is empty.
+    returncode = 0
 
     param = int(era5_info["param"])
     vparam = f"{param:03}"
@@ -94,10 +96,15 @@ def download_data_dkrz(freq, era5_info, origin, iac_path, year, months, all_mont
                 logger.error(f"Command failed with return code {returncode}")
                 logger.error(f"Standard output:\n{e.stdout}")
                 logger.error(f"Standard error:\n{e.stderr}")
+                break
+
     if freq == "1D":
         gribfile = f'{iac_path}{family}{level}{typeid}_{freq}_{year}-MM_{vparam}.grb'
     elif freq == "1H":
         gribfile = f'{iac_path}{family}{level}{typeid}_{freq}_{year}-MM-DD_{vparam}.grb'
+    else:
+        logger.error(f"Frequency {freq} not supported for DKRZ download.")
+        gribfile = None
     return gribfile, returncode
 
 
