@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-File Name : unit_test.py
+File Name : unit_tests_config_utils.py
 Author: Ruth Lorenz (ruth.lorenz@c2sm.ethz.ch)
 Created: 28/05/2026
 Purpose: unit tests for functions in data_management_reanalysis repo
@@ -9,10 +9,10 @@ Purpose: unit tests for functions in data_management_reanalysis repo
 """
 
 import json
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
-from functions.file_util import parse_args, read_era5_info, read_cerra_info, read_cmip_info
+from functions.file_util import parse_args, read_era5_info, read_cerra_info, read_era5_info_list, read_cmip_info
 from functions.general_functions import convert_month_list
 from functions.read_config import read_yaml_config
 
@@ -118,6 +118,78 @@ def test_read_cerra_info():
 def test_read_cerra_info_missing_variable():
 	info = read_cerra_info("nonexistent_variable")
 	assert info is None
+
+
+
+# test read_era5_info_list, which has a list as input instead single variable name
+
+# Mock JSON data structured EXACTLY like your function expects.
+# Notice how index 3 is just a dummy placeholder since your function skips it.
+MOCK_ERA5_JSON = {
+    "2t": [
+        "2 metre temperature",  # index 0: vlong
+        "K",                   # index 1: vunit
+        "167.128",             # index 2: vparam
+        "dummy_placeholder",   # index 3: skipped by your code
+        "type_analysis",       # index 4: analysis
+        "type_forecast",       # index 5: forecast
+        "tas",                 # index 6: vcmip
+        "K"                    # index 7: unitcmip
+    ],
+    "tp": [
+        "Total precipitation",
+        "m",
+        "228.128",
+        "dummy_placeholder",
+        "type_analysis",
+        "type_forecast",
+        "pr",
+        "kg m-2 s-1"
+    ]
+}
+
+
+# 1. Patch 'builtins.open' to intercept the JSON file read
+# 2. Patch 'your_module.logger' to mock the global logger object
+@patch("builtins.open", new_callable=mock_open, read_data=json.dumps(MOCK_ERA5_JSON))
+@patch("your_module.logger")  # <-- Change 'your_module' to your actual file name
+def test_read_era5_info_list_success(mock_logger, mock_file):
+    """Test that valid short names cleanly extract the dictionary metadata."""
+    from your_module import read_era5_info_list  # Import function dynamically
+
+    vname_list = ["2t", "tp"]
+    result = read_era5_info_list(vname_list)
+
+    # Assert that the function attempted to open the correct file
+    mock_file.assert_called_once_with("ERA5_variables.json", "r")
+
+    # Assert structural integrity of the mapped dictionary output
+    assert "2t" in result
+    assert result["2t"]["short_name"] == "2t"
+    assert result["2t"]["long_name"] == "2 metre temperature"
+    assert result["2t"]["unit"] == "K"
+    assert result["2t"]["param"] == "167.128"
+    assert result["2t"]["analysis"] == "type_analysis"
+    assert result["2t"]["cmip_name"] == "tas"
+    assert result["2t"]["cmip_unit"] == "K"
+
+    assert "tp" in result
+    assert result["tp"]["short_name"] == "tp"
+    assert result["tp"]["cmip_name"] == "pr"
+
+    # Verify that the logger was hit (5 log strings * 2 variables = 10 calls)
+    assert mock_logger.info.call_count == 10
+
+
+@patch("builtins.open", new_callable=mock_open, read_data=json.dumps(MOCK_ERA5_JSON))
+@patch("your_module.logger")
+def test_read_era5_info_list_missing_variable(mock_logger, mock_file):
+    """Test that a KeyError is thrown if a requested variable is absent from the JSON."""
+
+    # 'ssr' is not inside our MOCK_ERA5_JSON setup
+    with pytest.raises(KeyError):
+        read_era5_info_list(["ssr"])
+
 
 # test read_cmip_info with different scenarios of variable presence in the tables, using mocking to simulate the HTTP responses and logger behavior
 def test_read_cmip_info_found_in_day_table(mocker):
