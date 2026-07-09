@@ -94,7 +94,6 @@ def read_era5_info_list(vname_list):
         era5 = json.load(jf)
         # Variable's long-name, param and unit
         for vname in vname_list:
-            print(vname)
             vlong = era5[vname][0]
             vunit = era5[vname][1]
             vparam = era5[vname][2]
@@ -140,6 +139,7 @@ def read_cerra_info(vname):
 
     with open("CERRA_variables.json", "r") as jf:
         cerra = json.load(jf)
+
         # Variable's long-name, param and unit
         vlong = cerra[vname][0]
         vunit = cerra[vname][1]

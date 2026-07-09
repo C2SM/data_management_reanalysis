@@ -563,7 +563,6 @@ def convert_valid_time_latitude_longitude(ncfile, workdir, era5_info, dataname, 
     Returns:
     Name of the netcdf file with converted time, lat, lon
     """
-
     ds = xr.open_dataset(ncfile)
 
     # rename latitude,longitude to lat, lon if necessary
@@ -581,7 +580,6 @@ def convert_valid_time_latitude_longitude(ncfile, workdir, era5_info, dataname, 
         "lat": {"_FillValue": None},
         "lon": {"_FillValue": None},
     }
-
     tmp_outfile = f'{workdir}/tmp3_{era5_info["short_name"]}_{dataname}_{year}{month}.nc'
 
     ds.to_netcdf(tmp_outfile, unlimited_dims="time", encoding=encoding, format='NETCDF4')
