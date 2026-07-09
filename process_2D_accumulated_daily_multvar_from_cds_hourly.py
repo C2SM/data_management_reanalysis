@@ -68,7 +68,7 @@ def download_data_cds_multvar(dataname, varlist, download_path, year, month, ove
 
     Input:
     dataname: name of the dataset, e.g. "ERA5-Land"
-    varlist: list of variable long names to be downloaded, e.g. ["2m temperature", "10m u-component of wind"]
+    varlist: list of variable long names to be downloaded, e.g. ["2m_temperature", "10m_u-component_of_wind"]
     download_path: path to save the downloaded file
     year: year to be downloaded, e.g. 2020
     month: month to be downloaded, e.g. "01" for January
