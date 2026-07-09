@@ -15,9 +15,9 @@ from functions.general_functions import convert_month_list, download_data_dkrz
 
 # test convert_month_list with different input formats
 def test_convert_month_list():
-	assert convert_month_list(01, 02) == ["01", "02"]
-	assert convert_month_list(10, 11, 12) == ["10", "11", "12"]
-	assert convert_month_list("01", "02") == ["01", "02"]
+	assert convert_month_list("01, 02") == ["01", "02"]
+	assert convert_month_list("10, 11, 12") == ["10", "11", "12"]
+	assert convert_month_list("09, 10, 11, 12") == ["09", "10", "11", "12"]
 
 
 # test download_data_dkrz with mocked subprocess.run to avoid actual rsync calls
@@ -121,7 +121,7 @@ def test_download_specific_months_forecast_hourly(mock_run, mock_logger, mock_ma
 @patch("functions.general_functions.subprocess.run")
 def test_download_subprocess_failure(mock_run, mock_logger, mock_makedirs, base_era5_info):
     """Test that rsync command failures are intercepted and logged without breaking execution."""
-    from your_module import download_data_dkrz
+    from functions.general_functions import download_data_dkrz
 
     # Make the subprocess call throw an execution error
     mock_run.side_effect = subprocess.CalledProcessError(

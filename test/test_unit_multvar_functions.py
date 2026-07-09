@@ -192,14 +192,18 @@ class TestProcessEra5MonthlyData:
         """Test the standard happy path where everything processes successfully."""
         inputs = self._get_test_inputs()
 
-        # Setup mock behaviors
-        mock_os_isfile.return_value = True
+        # Sequential returns for each os.path.isfile check in the function loop:
+        # 1. isfile(file) -> True (unzipped file exists)
+        # 2. isfile(outfile) -> False (output doesn't exist yet, don't skip!)
+        # 3. isfile(outfile_name) -> True (verification after conversion)
+        # 4. isfile(outfile_mon) -> True (verification after monthly mean)
+        mock_os_isfile.side_effect = [True, False, True, True]
         mock_os_getsize.return_value = 100  # Non-zero size
 
         expected_outfile = (
             "/mock/proc/tas/day/native/2026/tas_day_ERA5_202607.nc"
         )
-        mock_convert_valid_time.return_value = "/mock/work/all/tas/tmp_out.nc"
+        mock_convert_valid_time.return_value = "/mock/work/all/tas/tmp3_out.nc"
         mock_convert_era5.return_value = expected_outfile
         mock_calc_mon_mean.return_value = (
             "/mock/proc/tas/day/native/2026/tas_mon_ERA5_202607.nc"
@@ -222,7 +226,7 @@ class TestProcessEra5MonthlyData:
             overwrite=False,
         )
 
-        # Pytest uses standard Python assert statements
+        # Assertions
         mock_zipfile.assert_called_once_with(inputs["download_file"], "r")
         mock_convert_valid_time.assert_called_once()
         mock_convert_era5.assert_called_once()
@@ -234,6 +238,7 @@ class TestProcessEra5MonthlyData:
         inputs["logger"].info.assert_any_call(
             f"File {expected_outfile} written."
         )
+
 
     @patch("process_2D_analysis_multvars_from_cds_daily.zipfile.ZipFile")
     @patch("process_2D_analysis_multvars_from_cds_daily.os.makedirs")
@@ -251,7 +256,7 @@ class TestProcessEra5MonthlyData:
         mock_os_isfile.side_effect = lambda path: True
 
         # Execute
-        process_era5_monthly_data(
+        process_multvar_era5_data(
             download_file_multvar=inputs["download_file"],
             work_all_path=inputs["work_all_path"],
             var_list_short=inputs["var_list_short"],
@@ -284,7 +289,7 @@ class TestProcessEra5MonthlyData:
 
         # Use pytest.raises to intercept system exits cleanly
         with pytest.raises(SystemExit) as exc_info:
-            process_era5_monthly_data(
+            process_multvar_era5_data(
                 download_file_multvar=inputs["download_file"],
                 work_all_path=inputs["work_all_path"],
                 var_list_short=inputs["var_list_short"],

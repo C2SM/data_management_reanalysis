@@ -56,7 +56,7 @@ def test_read_yaml_config_valid():
 	assert config["paths"]["proc"] == "/net/atmos/data/era5_cds/processed/v2/"
 
 	assert "time" in config
-	assert config["time"]["months"] == 01
+	assert config["time"]["months"] == 1
 	assert config["time"]["startyr"] == 2025
 	assert config["time"]["endyr"] == 2025
 
@@ -83,14 +83,14 @@ def test_read_era5_info():
 	assert info["short_name"] == "2t"
 	assert info["long_name"] == "2m_temperature"
 	assert info["unit"] == "K"
-	assert info["param"] == 167
+	assert info["param"] == "167"
 	assert info["cmip_name"] == "tas"
 	assert info["cmip_unit"] == "K"
 
 
 def test_read_era5_info_missing_variable():
-	info = read_era5_info("nonexistent_variable")
-	assert info is None
+    with pytest.raises(KeyError):
+        read_era5_info("nonexistent_variable")
 
 
 def test_read_cerra_info():
@@ -102,14 +102,15 @@ def test_read_cerra_info():
 	assert info["short_name"] == "2t"
 	assert info["long_name"] == "2m_temperature"
 	assert info["unit"] == "K"
-	assert info["param"] == 167
+	assert info["param"] == "167"
 	assert info["cmip_name"] == "tas"
 	assert info["cmip_unit"] == "K"
 	assert info["agg_method"] == "mean"
 
 def test_read_cerra_info_missing_variable():
-	info = read_cerra_info("nonexistent_variable")
-	assert info is None
+    # 'nonexistent_variable' is not inside our json setup
+    with pytest.raises(KeyError):
+        read_cerra_info("nonexistent_variable")
 
 
 
@@ -119,7 +120,7 @@ def test_read_cerra_info_missing_variable():
 # Notice how index 3 is just a dummy placeholder since your function skips it.
 MOCK_ERA5_JSON = {
     "2t": [
-        "2 metre temperature",  # index 0: vlong
+        "2m_temperature",      # index 0: vlong
         "K",                   # index 1: vunit
         "167.128",             # index 2: vparam
         "dummy_placeholder",   # index 3: skipped by your code
@@ -129,7 +130,7 @@ MOCK_ERA5_JSON = {
         "K"                    # index 7: unitcmip
     ],
     "tp": [
-        "Total precipitation",
+        "total_precipitation",
         "m",
         "228.128",
         "dummy_placeholder",
@@ -142,13 +143,11 @@ MOCK_ERA5_JSON = {
 
 
 # 1. Patch 'builtins.open' to intercept the JSON file read
-# 2. Patch 'your_module.logger' to mock the global logger object
+# 2. Patch 'functions.file_util.logger' to mock the global logger object
 @patch("builtins.open", new_callable=mock_open, read_data=json.dumps(MOCK_ERA5_JSON))
-@patch("your_module.logger")  # <-- Change 'your_module' to your actual file name
+@patch("functions.file_util.logger")
 def test_read_era5_info_list_success(mock_logger, mock_file):
     """Test that valid short names cleanly extract the dictionary metadata."""
-    from your_module import read_era5_info_list  # Import function dynamically
-
     vname_list = ["2t", "tp"]
     result = read_era5_info_list(vname_list)
 
@@ -158,7 +157,7 @@ def test_read_era5_info_list_success(mock_logger, mock_file):
     # Assert structural integrity of the mapped dictionary output
     assert "2t" in result
     assert result["2t"]["short_name"] == "2t"
-    assert result["2t"]["long_name"] == "2 metre temperature"
+    assert result["2t"]["long_name"] == "2m_temperature"
     assert result["2t"]["unit"] == "K"
     assert result["2t"]["param"] == "167.128"
     assert result["2t"]["analysis"] == "type_analysis"
@@ -174,7 +173,7 @@ def test_read_era5_info_list_success(mock_logger, mock_file):
 
 
 @patch("builtins.open", new_callable=mock_open, read_data=json.dumps(MOCK_ERA5_JSON))
-@patch("your_module.logger")
+@patch("functions.file_util.logger")
 def test_read_era5_info_list_missing_variable(mock_logger, mock_file):
     """Test that a KeyError is thrown if a requested variable is absent from the JSON."""
 
@@ -183,106 +182,104 @@ def test_read_era5_info_list_missing_variable(mock_logger, mock_file):
         read_era5_info_list(["ssr"])
 
 
-# test read_cmip_info with different scenarios of variable presence in the tables, using mocking to simulate the HTTP responses and logger behavior
-def test_read_cmip_info_found_in_day_table(mocker):
-    """Test that the variable is successfully found in the first (CMIP6_day) table."""
+# test read_cmip_info with different scenarios of variable presence in the tables
+# using mocking to simulate the HTTP responses and logger behavior
+def test_read_cmip_info_found_in_day_table():
+    """Test using built-in context managers (no plugins required)."""
     # Arrange
-    mock_get = mocker.patch('cmip_utils.requests.get')
-    mock_logger = mocker.patch('cmip_utils.logger')
+    with patch('functions.file_util.requests.get') as mock_get, \
+         patch('functions.file_util.logger') as mock_logger:
 
-    mock_response = MagicMock()
-    mock_response.text = json.dumps({
-        "variable_entry": {
-            "tas": {"standard_name": "air_temperature", "long_name": "Near-Surface Air Temperature"}
-        }
-    })
-    mock_get.return_value = mock_response
+        mock_response = MagicMock()
+        mock_response.text = json.dumps({
+            "variable_entry": {
+                "tas": {"standard_name": "air_temperature", "long_name": "Near-Surface Air Temperature"}
+            }
+        })
+        mock_get.return_value = mock_response
 
-    # Act
-    standard_name, long_name = read_cmip_info("tas")
+        # Act
+        standard_name, long_name = read_cmip_info("tas")
 
-    # Assert
-    assert standard_name == "air_temperature"
-    assert long_name == "Near-Surface Air Temperature"
+        # Assert
+        assert standard_name == "air_temperature"
+        assert long_name == "Near-Surface Air Temperature"
+        mock_get.assert_called_once_with(
+            'https://raw.githubusercontent.com/PCMDI/cmip6-cmor-tables/refs/heads/main/Tables/CMIP6_day.json'
+        )
+        mock_logger.error.assert_not_called()
 
-    mock_get.assert_called_once_with(
-        'https://raw.githubusercontent.com/PCMDI/cmip6-cmor-tables/refs/heads/main/Tables/CMIP6_day.json'
-    )
-    mock_logger.error.assert_not_called()
 
-
-def test_read_cmip_info_fallback_to_amon_table(mocker):
-    """Test fallback to the second (CMIP6_Amon) table when missing from the first."""
+def test_read_cmip_info_fallback_to_amon_table():
     # Arrange
-    mock_get = mocker.patch('cmip_utils.requests.get')
-    mock_logger = mocker.patch('cmip_utils.logger')
+    with patch('functions.file_util.requests.get') as mock_get, \
+         patch('functions.file_util.logger') as mock_logger:
 
-    mock_day_resp = MagicMock()
-    mock_day_resp.text = json.dumps({"variable_entry": {}})  # Empty, triggers KeyError
+        mock_day_resp = MagicMock()
+        mock_day_resp.text = json.dumps({"variable_entry": {}})
 
-    mock_amon_resp = MagicMock()
-    mock_amon_resp.text = json.dumps({
-        "variable_entry": {
-            "pr": {"standard_name": "precipitation_flux", "long_name": "Precipitation"}
-        }
-    })
+        mock_amon_resp = MagicMock()
+        mock_amon_resp.text = json.dumps({
+            "variable_entry": {
+                "pr": {"standard_name": "precipitation_flux", "long_name": "Precipitation"}
+            }
+        })
 
-    # side_effect returns these mocks sequentially on successive calls
-    mock_get.side_effect = [mock_day_resp, mock_amon_resp]
+        mock_get.side_effect = [mock_day_resp, mock_amon_resp]
 
-    # Act
-    standard_name, long_name = read_cmip_info("pr")
+        # Act
+        standard_name, long_name = read_cmip_info("pr")
 
-    # Assert
-    assert standard_name == "precipitation_flux"
-    assert long_name == "Precipitation"
-    assert mock_get.call_count == 2
-    mock_logger.error.assert_called_once_with("CMIP variable pr not found in CMIP6_day table.")
+        # Assert
+        assert standard_name == "precipitation_flux"
+        assert long_name == "Precipitation"
+        assert mock_get.call_count == 2
+        mock_logger.error.assert_called_once_with("CMIP variable pr not found in CMIP6_day table.")
 
 
-def test_read_cmip_info_fallback_to_omon_table(mocker):
+def test_read_cmip_info_fallback_to_omon_table():
     """Test fallback to the third (CMIP6_Omon) table when missing from the first two."""
     # Arrange
-    mock_get = mocker.patch('cmip_utils.requests.get')
-    mock_logger = mocker.patch('cmip_utils.logger')
+    with patch('functions.file_util.requests.get') as mock_get, \
+         patch('functions.file_util.logger') as mock_logger:
 
-    mock_empty_resp = MagicMock()
-    mock_empty_resp.text = json.dumps({"variable_entry": {}})
+        mock_empty_resp = MagicMock()
+        mock_empty_resp.text = json.dumps({"variable_entry": {}})
 
-    mock_omon_resp = MagicMock()
-    mock_omon_resp.text = json.dumps({
-        "variable_entry": {
-            "tos": {"standard_name": "sea_surface_temperature", "long_name": "Sea Surface Temperature"}
-        }
-    })
+        mock_omon_resp = MagicMock()
+        mock_omon_resp.text = json.dumps({
+            "variable_entry": {
+                "tos": {"standard_name": "sea_surface_temperature", "long_name": "Sea Surface Temperature"}
+            }
+        })
 
-    mock_get.side_effect = [mock_empty_resp, mock_empty_resp, mock_omon_resp]
+        mock_get.side_effect = [mock_empty_resp, mock_empty_resp, mock_omon_resp]
 
-    # Act
-    standard_name, long_name = read_cmip_info("tos")
+        # Act
+        standard_name, long_name = read_cmip_info("tos")
 
-    # Assert
-    assert standard_name == "sea_surface_temperature"
-    assert long_name == "Sea Surface Temperature"
-    assert mock_get.call_count == 3
-    assert mock_logger.error.call_count == 2
+        # Assert
+        assert standard_name == "sea_surface_temperature"
+        assert long_name == "Sea Surface Temperature"
+        assert mock_get.call_count == 3
+        assert mock_logger.error.call_count == 2
 
 
-def test_read_cmip_info_not_found_anywhere(mocker):
+def test_read_cmip_info_not_found_anywhere():
     """Test that (None, None) is returned when the variable isn't in any table."""
     # Arrange
-    mock_get = mocker.patch('cmip_utils.requests.get')
-    mock_logger = mocker.patch('cmip_utils.logger')
+    with patch('functions.file_util.requests.get') as mock_get, \
+         patch('functions.file_util.logger') as mock_logger:
 
-    mock_empty_resp = MagicMock()
-    mock_empty_resp.text = json.dumps({"variable_entry": {}})
-    mock_get.return_value = mock_empty_resp  # Will return empty for all calls
+        mock_empty_resp = MagicMock()
+        mock_empty_resp.text = json.dumps({"variable_entry": {}})
+        mock_get.return_value = mock_empty_resp  # Will return empty for all calls
 
-    # Act
-    standard_name, long_name = read_cmip_info("fake_variable")
+        # Act
+        standard_name, long_name = read_cmip_info("fake_variable")
 
-    # Assert
-    assert standard_name is None
-    assert long_name is None
-    assert mock_get.call_count == 3
-    assert mock_logger.error.call_count == 3
+        # Assert
+        assert standard_name is None
+        assert long_name is None
+        assert mock_get.call_count == 3
+        assert mock_logger.error.call_count == 3
