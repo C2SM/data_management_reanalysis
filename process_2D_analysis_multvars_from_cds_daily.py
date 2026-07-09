@@ -228,7 +228,7 @@ def main():
                         os.remove(tmp_outfile)
                         logger.info(f"Temporary file {tmp_outfile} removed.")
 
-                    # calculate monthly mean
+                    # 3. calculate monthly mean
                     outfile_mon = calc_mon_mean(proc_archive, outfile_name)
                     if not os.path.isfile(outfile_mon) or os.path.getsize(outfile_mon) == 0:
                         logger.error(f"Output file {outfile_mon} not created successfully.")
@@ -242,10 +242,10 @@ def main():
         logger.info(download_success)
 
         # clean up work directory after processing all months for the year
-        #if os.path.isdir(work_all_path):
-        #    logger.info(f"Cleaning up work directory {work_all_path} after processing year {year}.")
-        #    shutil.rmtree(work_all_path)
-        #    logger.info(f"Work directory {work_all_path} removed.")
+        if os.path.isdir(work_all_path):
+            logger.info(f"Cleaning up work directory {work_all_path} after processing year {year}.")
+            shutil.rmtree(work_all_path)
+            logger.info(f"Work directory {work_all_path} removed.")
 
 
 if __name__ == "__main__":
