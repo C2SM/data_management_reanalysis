@@ -175,10 +175,14 @@ def main():
         logger.info(f"Processing year {year}.")
 
         if store == 'dkrz':
-            download_file = download_data_dkrz(
+            download_file, code = download_data_dkrz(
                 freq=freq, era5_info=era5_info, origin=origin, iac_path=grib_path,
                 year=year, months=months, all_months=all_months, family=family, level=level)
-            download_success = f"Data download successful!"
+            if code != 0:
+                logger.error(f"Data download failed with code {code}.")
+                sys.exit(1)
+            else:
+                download_success = f"Data download successful!"
         else:
             download_success = f"Warning, download from store {store} not implemented."
         logger.info(download_success)
